@@ -652,7 +652,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200 overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200">
       
       {/* Cabeçalho Fixo Translúcido (Sticky Glassmorphic) */}
       <header className="sticky top-0 z-[50] bg-[#FAF9F6]/80 backdrop-blur-md border-b border-stone-200/60 px-4 sm:px-6 py-3.5 flex flex-row items-center justify-between gap-2 shadow-[0_2px_15px_-3px_rgba(28,25,23,0.02)]">
@@ -661,7 +661,7 @@ export default function App() {
             W
           </div>
           <div className="min-w-0">
-            <h1 className="font-serif-editorial text-[10px] sm:text-[11px] font-medium tracking-[0.25em] text-stone-900 uppercase truncate">
+            <h1 className="font-sans text-[10px] sm:text-[11px] font-light tracking-[0.3em] text-stone-900 uppercase truncate">
               WILKSON FOTOGRAFIAS
             </h1>
           </div>

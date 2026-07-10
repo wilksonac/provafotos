@@ -3,6 +3,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
+import { db } from './lib/firebase';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // Dados iniciais de fallback
 const defaultClientes = [
@@ -78,6 +80,52 @@ export default function App() {
     } catch (e) {}
   }, [authenticatedGalleries]);
 
+  // Sincronizar clientes e eventos do Firestore em tempo real
+  useEffect(() => {
+    if (!db) return;
+
+    console.log("[FIREBASE] Ativando ouvintes em tempo real do Firestore...");
+    
+    const unsubscribeClientes = onSnapshot(collection(db, "clientes"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      if (docs.length === 0) {
+        // Inicializar com dados padrão se estiver vazio
+        defaultClientes.forEach(async (c) => {
+          await setDoc(doc(db, "clientes", c.id), c);
+        });
+      } else {
+        setClientes(docs);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar clientes:", error);
+    });
+
+    const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      if (docs.length === 0) {
+        // Inicializar com dados padrão se estiver vazio
+        defaultEventos.forEach(async (e) => {
+          await setDoc(doc(db, "eventos", e.id), e);
+        });
+      } else {
+        setEventos(docs);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar eventos:", error);
+    });
+
+    return () => {
+      unsubscribeClientes();
+      unsubscribeEventos();
+    };
+  }, []);
+
   // Monitora alterações nos Clientes e persiste no localStorage
   useEffect(() => {
     try {
@@ -124,13 +172,20 @@ export default function App() {
       id: newClientData.id || `cli_${Date.now()}`,
       ...newClientData
     };
-    setClientes((prev) => {
-      const exists = prev.some((c) => c.id === newClient.id);
-      if (exists) {
-        return prev.map((c) => (c.id === newClient.id ? newClient : c));
-      }
-      return [...prev, newClient];
-    });
+    
+    if (db) {
+      setDoc(doc(db, "clientes", newClient.id), newClient)
+        .then(() => console.log("[FIREBASE] Cliente salvo:", newClient.id))
+        .catch(err => console.error("[FIREBASE] Erro ao salvar cliente:", err));
+    } else {
+      setClientes((prev) => {
+        const exists = prev.some((c) => c.id === newClient.id);
+        if (exists) {
+          return prev.map((c) => (c.id === newClient.id ? newClient : c));
+        }
+        return [...prev, newClient];
+      });
+    }
     console.log("[ADMIN] Cadastro de cliente processado:", newClient);
     return newClient;
   };
@@ -153,7 +208,13 @@ export default function App() {
       ...newEventData
     };
     
-    setEventos((prev) => [...prev, newEvent]);
+    if (db) {
+      setDoc(doc(db, "eventos", newEvent.id), newEvent)
+        .then(() => console.log("[FIREBASE] Evento salvo:", newEvent.id))
+        .catch(err => console.error("[FIREBASE] Erro ao salvar evento:", err));
+    } else {
+      setEventos((prev) => [...prev, newEvent]);
+    }
     console.log("[ADMIN] Nova galeria de evento criada:", newEvent);
 
     // Enviar e-mail de credenciais ao cliente
@@ -178,99 +239,163 @@ export default function App() {
   // Vincular upload de fotos ao evento selecionado no painel
   const handleUploadSuccess = (uploadedFileData) => {
     console.log(`[UPLOAD] Vinculando foto enviada (${uploadedFileData.name}) ao evento: ${activeEventId}`);
-    setEventos((prevEventos) =>
-      prevEventos.map((evt) => {
-        if (evt.id === activeEventId) {
-          return {
-            ...evt,
-            fotos: [
-              ...evt.fotos,
-              {
-                id: uploadedFileData.id,
-                name: uploadedFileData.name,
-                url_storage: uploadedFileData.url,
-                selecionada: false
-              }
-            ]
-          };
-        }
-        return evt;
-      })
-    );
+    
+    const targetEvent = eventos.find(e => e.id === activeEventId);
+    if (!targetEvent) return;
+
+    const newPhoto = {
+      id: uploadedFileData.id,
+      name: uploadedFileData.name,
+      url_storage: uploadedFileData.url,
+      selecionada: false
+    };
+
+    if (db) {
+      const updatedPhotos = [...(targetEvent.fotos || []), newPhoto];
+      updateDoc(doc(db, "eventos", activeEventId), { fotos: updatedPhotos })
+        .then(() => console.log("[FIREBASE] Foto vinculada ao evento:", activeEventId))
+        .catch(err => console.error("[FIREBASE] Erro ao vincular foto:", err));
+    } else {
+      setEventos((prevEventos) =>
+        prevEventos.map((evt) => {
+          if (evt.id === activeEventId) {
+            return {
+              ...evt,
+              fotos: [...(evt.fotos || []), newPhoto]
+            };
+          }
+          return evt;
+        })
+      );
+    }
   };
 
   // Toggles de seleção na galeria do cliente
   const handleToggleSelection = (eventId, photoId, isSelected) => {
-    setEventos((prevEventos) =>
-      prevEventos.map((evt) => {
-        if (evt.id === eventId) {
-          return {
-            ...evt,
-            fotos: (evt.fotos || []).map((photo) =>
-              photo.id === photoId ? { ...photo, selecionada: isSelected } : photo
-            )
-          };
-        }
-        return evt;
-      })
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const updatedPhotos = (targetEvent.fotos || []).map((photo) =>
+      photo.id === photoId ? { ...photo, selecionada: isSelected } : photo
     );
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { fotos: updatedPhotos })
+        .then(() => console.log("[FIREBASE] Seleção de foto atualizada:", photoId))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar seleção de foto:", err));
+    } else {
+      setEventos((prevEventos) =>
+        prevEventos.map((evt) => {
+          if (evt.id === eventId) {
+            return {
+              ...evt,
+              fotos: updatedPhotos
+            };
+          }
+          return evt;
+        })
+      );
+    }
   };
 
   // Finalizar evento
   const handleFinalizeEvent = (eventId) => {
-    setEventos((prevEventos) => {
-      const updated = prevEventos.map((evt) =>
-        evt.id === eventId ? { ...evt, status: 'finalizada' } : evt
-      );
-
-      // Disparar e-mails de finalização de seleção
-      const targetEvent = updated.find((e) => e.id === eventId);
+    if (db) {
+      const targetEvent = eventos.find((e) => e.id === eventId);
       if (targetEvent) {
-        const client = clientes.find((c) => c.id === targetEvent.id_cliente);
-        if (client) {
-          const selectedPhotos = (targetEvent.fotos || []).filter((f) => f.selecionada).length;
-          const totalPhotos = (targetEvent.fotos || []).length;
+        updateDoc(doc(db, "eventos", eventId), { status: "finalizada" })
+          .then(() => {
+            console.log("[FIREBASE] Evento finalizado:", eventId);
+            const client = clientes.find((c) => c.id === targetEvent.id_cliente);
+            if (client) {
+              const selectedPhotos = (targetEvent.fotos || []).filter((f) => f.selecionada).length;
+              const totalPhotos = (targetEvent.fotos || []).length;
 
-          sendSelectionFinalizedEmails({
-            clientName: client.nome,
-            clientEmail: client.email,
-            galleryTitle: targetEvent.titulo,
-            selectedCount: selectedPhotos,
-            totalCount: totalPhotos
-          }).then((res) => {
-            console.log(`[EMAIL] Notificações de finalização enviadas.`);
-          });
-        }
+              sendSelectionFinalizedEmails({
+                clientName: client.nome,
+                clientEmail: client.email,
+                galleryTitle: targetEvent.titulo,
+                selectedCount: selectedPhotos,
+                totalCount: totalPhotos
+              }).then((res) => {
+                console.log(`[EMAIL] Notificações de finalização enviadas.`);
+              });
+            }
+          })
+          .catch((err) => console.error("[FIREBASE] Erro ao finalizar evento:", err));
       }
+    } else {
+      setEventos((prevEventos) => {
+        const updated = prevEventos.map((evt) =>
+          evt.id === eventId ? { ...evt, status: 'finalizada' } : evt
+        );
 
-      return updated;
-    });
+        const targetEvent = updated.find((e) => e.id === eventId);
+        if (targetEvent) {
+          const client = clientes.find((c) => c.id === targetEvent.id_cliente);
+          if (client) {
+            const selectedPhotos = (targetEvent.fotos || []).filter((f) => f.selecionada).length;
+            const totalPhotos = (targetEvent.fotos || []).length;
+
+            sendSelectionFinalizedEmails({
+              clientName: client.nome,
+              clientEmail: client.email,
+              galleryTitle: targetEvent.titulo,
+              selectedCount: selectedPhotos,
+              totalCount: totalPhotos
+            }).then((res) => {
+              console.log(`[EMAIL] Notificações de finalização enviadas.`);
+            });
+          }
+        }
+
+        return updated;
+      });
+    }
     console.log(`[EVENT] Evento ${eventId} finalizado e travado.`);
   };
 
   // Reabrir evento
   const handleReopenEvento = (eventId) => {
-    setEventos((prevEventos) =>
-      prevEventos.map((evt) =>
-        evt.id === eventId ? { ...evt, status: 'ativa' } : evt
-      )
-    );
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { status: "ativa" })
+        .then(() => console.log("[FIREBASE] Evento reaberto:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao reabrir evento:", err));
+    } else {
+      setEventos((prevEventos) =>
+        prevEventos.map((evt) =>
+          evt.id === eventId ? { ...evt, status: 'ativa' } : evt
+        )
+      );
+    }
     console.log(`[EVENT] Evento ${eventId} reaberto com sucesso.`);
   };
 
   // Confirmar pagamento das fotos extras
   const handleConfirmPayment = (eventId) => {
-    setEventos((prevEventos) =>
-      prevEventos.map((evt) =>
-        evt.id === eventId ? { ...evt, pagamento_extras_confirmado: true } : evt
-      )
-    );
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { pagamento_extras_confirmado: true })
+        .then(() => console.log("[FIREBASE] Pagamento extras confirmado:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao confirmar pagamento:", err));
+    } else {
+      setEventos((prevEventos) =>
+        prevEventos.map((evt) =>
+          evt.id === eventId ? { ...evt, pagamento_extras_confirmado: true } : evt
+        )
+      );
+    }
     console.log(`[PAYMENT] Pagamento das fotos extras confirmado para o evento: ${eventId}`);
   };
 
   // Excluir galeria/evento
   const handleDeleteEvento = (eventId) => {
-    setEventos((prevEventos) => prevEventos.filter((evt) => evt.id !== eventId));
+    if (db) {
+      deleteDoc(doc(db, "eventos", eventId))
+        .then(() => console.log("[FIREBASE] Evento deletado:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao deletar evento:", err));
+    } else {
+      setEventos((prevEventos) => prevEventos.filter((evt) => evt.id !== eventId));
+    }
     console.log(`[EVENT] Evento ${eventId} excluído com sucesso.`);
   };
 

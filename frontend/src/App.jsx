@@ -56,38 +56,10 @@ const defaultPortfolio = [
 ];
 
 export default function App() {
-  // Inicialização de Clientes via localStorage
-  const [clientes, setClientes] = useState(() => {
-    try {
-      const saved = localStorage.getItem('wilkson_clientes');
-      return saved ? JSON.parse(saved) : defaultClientes;
-    } catch (e) {
-      console.error("Erro ao carregar clientes do localStorage", e);
-      return defaultClientes;
-    }
-  });
-
-  // Inicialização de Eventos via localStorage
-  const [eventos, setEventos] = useState(() => {
-    try {
-      const saved = localStorage.getItem('wilkson_eventos');
-      return saved ? JSON.parse(saved) : defaultEventos;
-    } catch (e) {
-      console.error("Erro ao carregar eventos do localStorage", e);
-      return defaultEventos;
-    }
-  });
-
-  // Inicialização do Portfólio via localStorage
-  const [portfolio, setPortfolio] = useState(() => {
-    try {
-      const saved = localStorage.getItem('wilkson_portfolio');
-      return saved ? JSON.parse(saved) : defaultPortfolio;
-    } catch (e) {
-      console.error("Erro ao carregar portfólio do localStorage", e);
-      return defaultPortfolio;
-    }
-  });
+  // Firestore é a única fonte de dados — estados iniciam vazios
+  const [clientes, setClientes] = useState([]);
+  const [eventos, setEventos] = useState([]);
+  const [portfolio, setPortfolio] = useState([]);
 
   // Navegação e Controle de Rotas
   const [activeTab, setActiveTab] = useState('client'); // 'client' | 'admin' | 'uploader' | 'magic-client'
@@ -135,14 +107,7 @@ export default function App() {
       snapshot.forEach((doc) => {
         docs.push({ id: doc.id, ...doc.data() });
       });
-      if (docs.length === 0) {
-        // Inicializar com dados padrão se estiver vazio
-        defaultClientes.forEach(async (c) => {
-          await setDoc(doc(db, "clientes", c.id), c);
-        });
-      } else {
-        setClientes(docs);
-      }
+      setClientes(docs);
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar clientes:", error);
     });
@@ -152,14 +117,7 @@ export default function App() {
       snapshot.forEach((doc) => {
         docs.push({ id: doc.id, ...doc.data() });
       });
-      if (docs.length === 0) {
-        // Inicializar com dados padrão se estiver vazio
-        defaultEventos.forEach(async (e) => {
-          await setDoc(doc(db, "eventos", e.id), e);
-        });
-      } else {
-        setEventos(docs);
-      }
+      setEventos(docs);
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar eventos:", error);
     });
@@ -169,14 +127,7 @@ export default function App() {
       snapshot.forEach((doc) => {
         docs.push({ id: doc.id, ...doc.data() });
       });
-      if (docs.length === 0) {
-        // Inicializar com dados padrão se estiver vazio
-        defaultPortfolio.forEach(async (p) => {
-          await setDoc(doc(db, "portfolio", p.id), p);
-        });
-      } else {
-        setPortfolio(docs);
-      }
+      setPortfolio(docs);
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar portfólio:", error);
     });
@@ -188,35 +139,7 @@ export default function App() {
     };
   }, []);
 
-  // Monitora alterações nos Clientes e persiste no localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('wilkson_clientes', JSON.stringify(clientes));
-    } catch (e) {
-      console.error("Quota do LocalStorage excedida para clientes", e);
-    }
-  }, [clientes]);
-
-  // Monitora alterações nos Eventos e persiste no localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('wilkson_eventos', JSON.stringify(eventos));
-    } catch (e) {
-      console.warn("Quota do LocalStorage excedida para eventos", e);
-      if (e.name === 'QuotaExceededError' || e.code === 22) {
-        alert("Atenção: O limite de armazenamento do navegador foi excedido pelas fotos salvas. \n\nPara evitar que fotos novas sumam ao recarregar, exclua algumas fotos ou use arquivos mais leves de teste (até 200kb).");
-      }
-    }
-  }, [eventos]);
-
-  // Monitora alterações no Portfólio e persiste no localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('wilkson_portfolio', JSON.stringify(portfolio));
-    } catch (e) {
-      console.warn("Quota do LocalStorage excedida para portfólio", e);
-    }
-  }, [portfolio]);
+  // localStorage removido — dados vêm exclusivamente do Firestore em tempo real
 
   // Monitora a URL para simular Links Mágicos (?gallery=token)
   useEffect(() => {

@@ -750,7 +750,6 @@ export default function App() {
               />
               <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
               <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-                <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-300">Fotografia Profissional</span>
                 <h2 className="font-serif-editorial text-3xl sm:text-5xl text-white font-light tracking-wide px-2">
                   Wilkson Fotografias
                 </h2>

@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,17 +13,19 @@ const firebaseConfig = {
 
 let app;
 let db = null;
+let auth = null;
 
 if (firebaseConfig.projectId) {
   try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    auth = getAuth(app);
     console.log("[FIREBASE] Inicializado com sucesso para o projeto:", firebaseConfig.projectId);
   } catch (error) {
     console.error("[FIREBASE] Erro ao inicializar o Firebase:", error);
   }
 } else {
-  console.warn("[FIREBASE] Configurações do Firebase não encontradas no ambiente. Utilizando modo local offline.");
+  console.warn("[FIREBASE] Configurações do Firebase não encontradas no ambiente.");
 }
 
-export { db };
+export { db, auth };

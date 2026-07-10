@@ -3,8 +3,9 @@ import AdminDashboard from './pages/AdminDashboard';
 import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
-import { db } from './lib/firebase';
+import { db, auth } from './lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
 // Dados iniciais de fallback
 const defaultClientes = [
@@ -74,9 +75,9 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // Estados de Autenticação do Administrador
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => sessionStorage.getItem('admin_auth') === 'true');
-  const [adminUser, setAdminUser] = useState('');
+  // Estados de Autenticação do Administrador (Firebase Auth)
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
 
@@ -543,31 +544,41 @@ export default function App() {
     window.history.pushState({}, '', '/');
   };
 
-  // Autenticação do Administrador
-  const handleAdminLoginSubmit = (e) => {
+  // Autenticação do Administrador via Firebase Auth
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAdminAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleAdminLoginSubmit = async (e) => {
     e.preventDefault();
     setAdminLoginError('');
-
-    const targetUser = (import.meta.env.VITE_ADMIN_USER || 'admin').trim().toLowerCase();
-    const targetPassword = (import.meta.env.VITE_ADMIN_PASSWORD || 'wilkson2026').trim();
-
-    if (
-      adminUser.trim().toLowerCase() === targetUser &&
-      adminPassword.trim() === targetPassword
-    ) {
-      setIsAdminAuthenticated(true);
-      sessionStorage.setItem('admin_auth', 'true');
-      setAdminUser('');
+    if (!auth) {
+      setAdminLoginError('Firebase Auth não configurado.');
+      return;
+    }
+    try {
+      await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPassword.trim());
+      setAdminEmail('');
       setAdminPassword('');
-    } else {
-      setAdminLoginError('Usuário ou senha administrativa incorretos.');
+    } catch (err) {
+      console.error('[AUTH] Erro ao fazer login:', err.code);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setAdminLoginError('E-mail ou senha incorretos.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setAdminLoginError('Muitas tentativas. Aguarde alguns minutos.');
+      } else {
+        setAdminLoginError('Erro ao autenticar. Tente novamente.');
+      }
     }
   };
 
-  const handleAdminLogout = () => {
-    setIsAdminAuthenticated(false);
-    sessionStorage.removeItem('admin_auth');
-    setActiveTab('client'); // Retorna para o portfólio público ao deslogar
+  const handleAdminLogout = async () => {
+    if (auth) await signOut(auth);
+    setActiveTab('client');
   };
 
   const activeEvent = eventos.find((e) => e.id === activeEventId);
@@ -812,13 +823,13 @@ export default function App() {
 
                   <form onSubmit={handleAdminLoginSubmit} className="space-y-4 pt-1">
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Usuário Admin</label>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">E-mail do Admin</label>
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={adminUser}
-                        onChange={(e) => setAdminUser(e.target.value)}
-                        placeholder="admin"
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                        placeholder="admin@wilksonfotografias.com.br"
                         className="w-full px-3.5 py-2.5 border border-stone-800 rounded-lg text-xs font-sans focus:outline-none focus:border-white bg-stone-950/80 text-white"
                       />
                     </div>

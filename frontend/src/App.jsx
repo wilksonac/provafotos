@@ -652,7 +652,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200">
+    <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200 overflow-x-hidden">
       
       {/* Cabeçalho */}
       <header className="bg-white border-b border-stone-200 px-4 sm:px-6 py-3 flex flex-row items-center justify-between gap-2 shadow-xs">

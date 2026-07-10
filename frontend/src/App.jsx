@@ -448,10 +448,33 @@ export default function App() {
         })
         .catch(err => {
           console.error("[FIREBASE] Erro ao deletar foto do portfólio no Firestore:", err);
-          alert(`Erro ao excluir foto do Firestore: ${err.message}\nVerifique se o seu IP está liberado ou se as regras de segurança do seu Firestore permitem gravação.`);
+          alert(`Erro ao excluir foto do Firestore: ${err.message}`);
         });
     } else {
       setPortfolio((prev) => prev.filter((p) => p.id !== photoId));
+    }
+  };
+
+  // Definir foto como destaque/capa do portfólio na página principal
+  const handleSetPortfolioCover = (photoId) => {
+    console.log("[PORTFOLIO] Definindo foto como destaque:", photoId);
+    const updatedPortfolio = portfolio.map(p => ({
+      ...p,
+      destaque: p.id === photoId
+    }));
+
+    if (db) {
+      portfolio.forEach((photo) => {
+        const isTarget = photo.id === photoId;
+        // Só atualiza se o estado do destaque for mudar para evitar escritas desnecessárias
+        if (photo.destaque !== isTarget) {
+          updateDoc(doc(db, "portfolio", photo.id), { destaque: isTarget })
+            .then(() => console.log(`[FIREBASE] Foto do portfólio ${photo.id} destaque = ${isTarget}`))
+            .catch(err => console.error("[FIREBASE] Erro ao atualizar destaque no Firestore:", err));
+        }
+      });
+    } else {
+      setPortfolio(updatedPortfolio);
     }
   };
 
@@ -587,6 +610,9 @@ export default function App() {
     ? portfolio
     : portfolio.filter((p) => p.category === portfolioCategory);
 
+  const coverPortfolioPhoto = portfolio.find((p) => p.destaque === true);
+  const coverPortfolioUrl = coverPortfolioPhoto ? coverPortfolioPhoto.url : 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80';
+
   // Renderização específica para link mágico (?gallery=token)
   if (activeTab === 'magic-client' && selectedGalleryToken) {
     const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
@@ -707,7 +733,8 @@ export default function App() {
             {/* Seção de Destaque - Hero Portfolio */}
             <div className="text-center py-12 sm:py-16 px-4 sm:px-6 rounded-xl shadow-sm relative overflow-hidden bg-stone-950">
               <div 
-                className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80')] bg-cover bg-center"
+                className="absolute inset-0 bg-cover bg-center animate-fade-in"
+                style={{ backgroundImage: `url('${coverPortfolioUrl}')` }}
               />
               <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
               <div className="relative z-10 max-w-2xl mx-auto space-y-4">
@@ -873,6 +900,7 @@ export default function App() {
               onLogout={handleAdminLogout}
               onSetEventCover={handleSetEventCover}
               onDeleteEventPhoto={handleDeleteEventPhoto}
+              onSetPortfolioCover={handleSetPortfolioCover}
             />
           )
         )}

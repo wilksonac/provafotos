@@ -26,7 +26,8 @@ export default function AdminDashboard({
   onDeletePortfolioPhoto,
   onLogout,
   onSetEventCover,
-  onDeleteEventPhoto
+  onDeleteEventPhoto,
+  onSetPortfolioCover
 }) {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
   
@@ -1413,6 +1414,26 @@ ${form.nomeFotografo}`;
                         />
                       </div>
                       
+                      {/* Botão de Destaque / Capa do Portfólio */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onSetPortfolioCover) {
+                            onSetPortfolioCover(photo.id);
+                          }
+                        }}
+                        className={`absolute top-2 left-2 border rounded p-1.5 transition-all shadow-xs z-10 ${
+                          photo.destaque
+                            ? 'bg-amber-500 border-amber-600 text-white'
+                            : 'bg-white/90 border-stone-200 text-stone-450 hover:text-amber-650'
+                        }`}
+                        title="Destacar esta foto como capa do Portfólio"
+                      >
+                        <svg className="w-3.5 h-3.5" fill={photo.destaque ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.969 0 1.371 1.24.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.17 0l-3.971 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118l-3.97-2.883c-.783-.57-.38-1.81.588-1.81h4.907a1 1 0 00.95-.69l1.519-4.674z"/>
+                        </svg>
+                      </button>
+
                       {/* Botão de Excluir */}
                       <button
                         type="button"

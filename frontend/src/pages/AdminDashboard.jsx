@@ -14,13 +14,16 @@ const getEventStatus = (evento) => {
 export default function AdminDashboard({
   clientes = [],
   eventos = [],
+  portfolio = [],
   onAddCliente,
   onAddEvento,
   onSelectEventUpload,
   onSelectEventView,
   onConfirmPayment,
   onDeleteEvento,
-  onReopenEvento
+  onReopenEvento,
+  onAddPortfolioPhoto,
+  onDeletePortfolioPhoto
 }) {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
   
@@ -62,6 +65,62 @@ export default function AdminDashboard({
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
+
+  // Estados e Handlers do Portfólio Admin
+  const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
+
+  const handlePortfolioUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+
+          if (onAddPortfolioPhoto) {
+            onAddPortfolioPhoto({
+              id: `port_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+              name: file.name,
+              url: dataUrl,
+              category: portfolioCategoryAdmin,
+              size: Math.round(dataUrl.length * 0.75) // Real size of the compressed Base64 string in bytes
+            });
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = null;
+  };
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'aberta' | 'expirada' | 'concluida'
 
   // Handlers
@@ -329,6 +388,16 @@ ${form.nomeFotografo}`;
             }`}
           >
             + Nova Galeria
+          </button>
+          <button
+            onClick={() => setActiveSubTab('portfolio')}
+            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
+              activeSubTab === 'portfolio'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            Portfólio
           </button>
         </div>
       </div>
@@ -1239,6 +1308,119 @@ ${form.nomeFotografo}`;
             </button>
           </div>
         </form>
+      )}
+
+      {/* Sub-tab 5: Portfólio */}
+      {activeSubTab === 'portfolio' && (
+        <div className="animate-scale-in space-y-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-stone-150 pb-4 gap-4">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Banco de Imagens</span>
+              <h3 className="font-serif-editorial text-lg text-stone-900 mt-0.5">Gerenciar Portfólio</h3>
+              <p className="text-[11px] text-stone-500 mt-1">Selecione uma categoria, suba novas fotos (serão otimizadas) ou remova as existentes.</p>
+            </div>
+
+            {/* Categorias Selector */}
+            <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold">
+              {[
+                { id: 'casamentos', label: 'Casamentos' },
+                { id: 'infantil', label: 'Infantil' },
+                { id: 'formatura', label: 'Formaturas' },
+                { id: 'corporativo', label: 'Corporativo' }
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setPortfolioCategoryAdmin(cat.id)}
+                  className={`px-3 py-1.5 rounded transition-all uppercase ${
+                    portfolioCategoryAdmin === cat.id ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Upload de Fotos de Portfólio */}
+          <div className="p-5 border border-dashed border-stone-200 rounded-xl bg-stone-50/20 text-center relative group hover:bg-stone-50/50 transition-colors">
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handlePortfolioUpload}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div className="py-6 space-y-3">
+              <div className="w-10 h-10 bg-white border border-stone-200 rounded-full flex items-center justify-center mx-auto shadow-sm group-hover:scale-105 transition-transform">
+                <svg className="w-5 h-5 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-stone-700 uppercase tracking-wider">Arraste ou clique para enviar fotos de Portfólio</p>
+                <p className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest">Categoria selecionada: {portfolioCategoryAdmin.toUpperCase()}</p>
+              </div>
+              <p className="text-[9px] text-stone-400/80 max-w-xs mx-auto uppercase tracking-wide">
+                As fotos originais serão redimensionadas e comprimidas automaticamente no envio para manter o carregamento instantâneo.
+              </p>
+            </div>
+          </div>
+
+          {/* Listagem de fotos cadastradas */}
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block mb-3">
+              Imagens Cadastradas ({portfolio.filter(p => p.category === portfolioCategoryAdmin).length})
+            </span>
+
+            {portfolio.filter(p => p.category === portfolioCategoryAdmin).length === 0 ? (
+              <div className="text-center py-12 border border-stone-150 rounded-xl bg-stone-50/10 text-stone-450 font-serif-editorial">
+                <p className="text-sm">Nenhuma foto cadastrada nesta categoria ainda.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {portfolio
+                  .filter((p) => p.category === portfolioCategoryAdmin)
+                  .map((photo) => (
+                    <div 
+                      key={photo.id}
+                      className="group relative bg-white border border-stone-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-all"
+                    >
+                      <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden">
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      
+                      {/* Botão de Excluir */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Excluir "${photo.name}" do portfólio?`)) {
+                            onDeletePortfolioPhoto(photo.id);
+                          }
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 hover:bg-red-500 hover:text-white border border-stone-200 text-stone-500 rounded p-1.5 transition-all shadow-xs"
+                        title="Remover foto do portfólio"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                      </button>
+                      
+                      <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex items-center justify-between">
+                        <span className="text-[9px] font-semibold text-stone-500 truncate max-w-[120px]">{photo.name}</span>
+                        <span className="text-[8px] font-mono text-stone-400 uppercase">{(photo.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Share Modal */}

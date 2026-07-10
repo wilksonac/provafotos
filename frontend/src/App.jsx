@@ -36,6 +36,25 @@ const defaultEventos = [
   }
 ];
 
+const defaultPortfolio = [
+  // Casamentos
+  { id: 'p1', name: 'Casamento 1', url: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80', category: 'casamentos', size: 180 * 1024 },
+  { id: 'p2', name: 'Casamento 2', url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800&auto=format&fit=crop&q=80', category: 'casamentos', size: 190 * 1024 },
+  { id: 'p3', name: 'Casamento 3', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80', category: 'casamentos', size: 210 * 1024 },
+  
+  // Infantil
+  { id: 'p4', name: 'Infantil 1', url: 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=800&auto=format&fit=crop&q=80', category: 'infantil', size: 150 * 1024 },
+  { id: 'p5', name: 'Infantil 2', url: 'https://images.unsplash.com/photo-1519689680058-324335c77ebe?w=800&auto=format&fit=crop&q=80', category: 'infantil', size: 170 * 1024 },
+  
+  // Formatura
+  { id: 'p6', name: 'Formatura 1', url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80', category: 'formatura', size: 220 * 1024 },
+  { id: 'p7', name: 'Formatura 2', url: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&auto=format&fit=crop&q=80', category: 'formatura', size: 200 * 1024 },
+  
+  // Corporativo
+  { id: 'p8', name: 'Corporativo 1', url: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&auto=format&fit=crop&q=80', category: 'corporativo', size: 160 * 1024 },
+  { id: 'p9', name: 'Corporativo 2', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&auto=format&fit=crop&q=80', category: 'corporativo', size: 180 * 1024 }
+];
+
 export default function App() {
   // Inicialização de Clientes via localStorage
   const [clientes, setClientes] = useState(() => {
@@ -59,10 +78,29 @@ export default function App() {
     }
   });
 
+  // Inicialização do Portfólio via localStorage
+  const [portfolio, setPortfolio] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wilkson_portfolio');
+      return saved ? JSON.parse(saved) : defaultPortfolio;
+    } catch (e) {
+      console.error("Erro ao carregar portfólio do localStorage", e);
+      return defaultPortfolio;
+    }
+  });
+
   // Navegação e Controle de Rotas
   const [activeTab, setActiveTab] = useState('client'); // 'client' | 'admin' | 'uploader' | 'magic-client'
   const [activeEventId, setActiveEventId] = useState(null);
   const [selectedGalleryToken, setSelectedGalleryToken] = useState(null);
+
+  // Estados do Portfólio Público
+  const [portfolioCategory, setPortfolioCategory] = useState('todos');
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [showClientLogin, setShowClientLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // Controle de autenticação para galerias restritas (Login + Senha)
   const [authenticatedGalleries, setAuthenticatedGalleries] = useState(() => {
@@ -80,7 +118,7 @@ export default function App() {
     } catch (e) {}
   }, [authenticatedGalleries]);
 
-  // Sincronizar clientes e eventos do Firestore em tempo real
+  // Sincronizar clientes, eventos e portfólio do Firestore em tempo real
   useEffect(() => {
     if (!db) return;
 
@@ -120,9 +158,27 @@ export default function App() {
       console.error("[FIREBASE] Erro ao sincronizar eventos:", error);
     });
 
+    const unsubscribePortfolio = onSnapshot(collection(db, "portfolio"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      if (docs.length === 0) {
+        // Inicializar com dados padrão se estiver vazio
+        defaultPortfolio.forEach(async (p) => {
+          await setDoc(doc(db, "portfolio", p.id), p);
+        });
+      } else {
+        setPortfolio(docs);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar portfólio:", error);
+    });
+
     return () => {
       unsubscribeClientes();
       unsubscribeEventos();
+      unsubscribePortfolio();
     };
   }, []);
 
@@ -146,6 +202,15 @@ export default function App() {
       }
     }
   }, [eventos]);
+
+  // Monitora alterações no Portfólio e persiste no localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('wilkson_portfolio', JSON.stringify(portfolio));
+    } catch (e) {
+      console.warn("Quota do LocalStorage excedida para portfólio", e);
+    }
+  }, [portfolio]);
 
   // Monitora a URL para simular Links Mágicos (?gallery=token)
   useEffect(() => {
@@ -425,6 +490,36 @@ export default function App() {
     console.log(`[EVENT] Evento ${eventId} excluído com sucesso.`);
   };
 
+  // Adicionar foto ao portfólio
+  const handleAddPortfolioPhoto = (photoData) => {
+    const newPhoto = {
+      id: photoData.id || `port_${Date.now()}`,
+      name: photoData.name,
+      url: photoData.url,
+      category: photoData.category,
+      size: photoData.size || 150 * 1024
+    };
+
+    if (db) {
+      setDoc(doc(db, "portfolio", newPhoto.id), newPhoto)
+        .then(() => console.log("[FIREBASE] Foto do portfólio salva:", newPhoto.id))
+        .catch(err => console.error("[FIREBASE] Erro ao salvar foto no portfólio:", err));
+    } else {
+      setPortfolio((prev) => [...prev, newPhoto]);
+    }
+  };
+
+  // Excluir foto do portfólio
+  const handleDeletePortfolioPhoto = (photoId) => {
+    if (db) {
+      deleteDoc(doc(db, "portfolio", photoId))
+        .then(() => console.log("[FIREBASE] Foto do portfólio deletada:", photoId))
+        .catch(err => console.error("[FIREBASE] Erro ao deletar foto do portfólio:", err));
+    } else {
+      setPortfolio((prev) => prev.filter((p) => p.id !== photoId));
+    }
+  };
+
   // Redirecionamento da ação "Fazer Upload" no Dashboard
   const triggerEventUpload = (eventId) => {
     setActiveEventId(eventId);
@@ -436,6 +531,38 @@ export default function App() {
     setSelectedGalleryToken(token);
     setActiveTab('magic-client');
     window.history.pushState({}, '', `/?gallery=${token}`);
+  };
+
+  // Autenticação geral na área do cliente (quando não usam link mágico)
+  const handleGeneralLogin = (e) => {
+    e.preventDefault();
+    setLoginError('');
+
+    // Achar cliente pelo email e senha
+    const client = clientes.find(
+      (c) => c.email.toLowerCase() === loginEmail.toLowerCase().trim() && c.senha === loginPassword
+    );
+
+    if (!client) {
+      setLoginError('E-mail ou senha incorretos.');
+      return;
+    }
+
+    // Achar evento vinculado a este cliente
+    const matchedEvent = eventos.find((evt) => evt.id_cliente === client.id);
+    if (!matchedEvent) {
+      setLoginError('Nenhuma galeria ativa vinculada a este cliente.');
+      return;
+    }
+
+    // Autenticar e redirecionar
+    setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
+    setSelectedGalleryToken(matchedEvent.token);
+    setActiveTab('magic-client');
+    setShowClientLogin(false);
+    setLoginEmail('');
+    setLoginPassword('');
+    console.log(`[CLIENT LOGIN] Sucesso para o cliente ${client.nome}. Acessando galeria: ${matchedEvent.titulo}`);
   };
 
   // Reseta a rota de volta para o ambiente de testes
@@ -546,7 +673,7 @@ export default function App() {
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
-              Área do Cliente (Demo 10k)
+              Ver Portfólio
             </button>
             <button
               onClick={() => setActiveTab('admin')}
@@ -579,26 +706,231 @@ export default function App() {
       {/* Main Content Render */}
       <main className="flex-grow flex flex-col p-6">
         
-        {/* Aba 1: Área do Cliente - Visualização Padrão */}
-        {activeTab === 'client' && (
-          <div className="flex-grow border border-stone-200 rounded-xl overflow-hidden bg-white shadow-sm">
-            <PhotoVirtualGrid
-              eventId="event_demo_default"
-              limiteFotos={25}
-              statusEvento="ativa"
-              permitirExtras={true}
-              selecaoLivre={false}
-              valorFotoExtra={25.0}
-              isDemo={true} 
-            />
-          </div>
-        )}
+        {/* Aba 1: Área do Cliente - Portfólio de Fotos */}
+        {activeTab === 'client' && (() => {
+          // Filtrar fotos do portfólio pela categoria
+          const filteredPortfolio = portfolioCategory === 'todos'
+            ? portfolio
+            : portfolio.filter((p) => p.category === portfolioCategory);
+
+          return (
+            <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
+              
+              {/* Seção de Destaque - Hero Portfolio */}
+              <div className="text-center py-12 px-4 border border-stone-200 bg-white rounded-xl shadow-sm relative overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] [background-size:16px_16px] opacity-35"></div>
+                <div className="relative z-10 max-w-2xl mx-auto space-y-4">
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Fotografia Profissional</span>
+                  <h2 className="font-serif-editorial text-4xl sm:text-5xl text-stone-900 font-light tracking-wide">
+                    Wilkson Fotografias
+                  </h2>
+                  <div className="h-px w-16 bg-stone-300 mx-auto"></div>
+                  <p className="text-stone-500 font-serif-editorial italic text-sm max-w-lg mx-auto font-light leading-relaxed">
+                    "Capturando sentimentos sinceros, luzes naturais e momentos inesquecíveis que duram para sempre."
+                  </p>
+                  
+                  {/* Botões de Acesso Rápido */}
+                  <div className="pt-2 flex items-center justify-center gap-3">
+                    <button
+                      onClick={() => setShowClientLogin(true)}
+                      className="px-6 py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                      </svg>
+                      Área do Cliente (Acessar Seleção)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtros de Categoria */}
+              <div className="flex justify-center border-b border-stone-200 pb-2">
+                <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
+                  {[
+                    { id: 'todos', label: 'Todos' },
+                    { id: 'casamentos', label: 'Casamentos' },
+                    { id: 'infantil', label: 'Infantil' },
+                    { id: 'formatura', label: 'Formaturas' },
+                    { id: 'corporativo', label: 'Corporativo' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setPortfolioCategory(cat.id);
+                        setLightboxIndex(null);
+                      }}
+                      className={`px-4 py-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
+                        portfolioCategory === cat.id
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid de Portfólio */}
+              {filteredPortfolio.length === 0 ? (
+                <div className="text-center py-20 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
+                  <p className="text-sm">Nenhuma foto cadastrada nesta categoria de portfólio.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {filteredPortfolio.map((photo, index) => (
+                    <div
+                      key={photo.id}
+                      onClick={() => setLightboxIndex(index)}
+                      className="group cursor-pointer bg-white border border-stone-205 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300"
+                    >
+                      <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ease-out"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                          <span className="text-[9px] text-white uppercase tracking-widest font-bold">Zoom da Imagem</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Modal Lightbox */}
+              {lightboxIndex !== null && filteredPortfolio[lightboxIndex] && (
+                <div 
+                  className="fixed inset-0 bg-stone-950/95 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+                  onClick={() => setLightboxIndex(null)}
+                >
+                  {/* Botão Fechar */}
+                  <button
+                    onClick={() => setLightboxIndex(null)}
+                    className="absolute top-4 right-4 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/60 rounded-full transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+
+                  {/* Imagem Principal */}
+                  <div className="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                    <img
+                      src={filteredPortfolio[lightboxIndex].url}
+                      alt={filteredPortfolio[lightboxIndex].name}
+                      className="max-w-full max-h-[85vh] object-contain rounded shadow-2xl"
+                    />
+                    
+                    {/* Botão Anterior */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxIndex((prev) => (prev > 0 ? prev - 1 : filteredPortfolio.length - 1));
+                      }}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/>
+                      </svg>
+                    </button>
+
+                    {/* Botão Próximo */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxIndex((prev) => (prev < filteredPortfolio.length - 1 ? prev + 1 : 0));
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Login (Área do Cliente) */}
+              {showClientLogin && (
+                <div className="fixed inset-0 bg-stone-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+                  <div className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative">
+                    {/* Botão Fechar */}
+                    <button
+                      onClick={() => {
+                        setShowClientLogin(false);
+                        setLoginError('');
+                      }}
+                      className="absolute top-4 right-4 text-stone-400 hover:text-stone-700"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
+
+                    <div className="space-y-4">
+                      <div className="text-center">
+                        <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Acesso Restrito</span>
+                        <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Área do Cliente</h3>
+                        <p className="text-[11px] text-stone-400 mt-1">Digite seu e-mail e senha de acesso enviados pelo fotógrafo.</p>
+                      </div>
+
+                      {loginError && (
+                        <div className="bg-red-50 border border-red-250 text-red-650 text-[10px] px-3 py-2 rounded-lg text-center font-semibold">
+                          {loginError}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleGeneralLogin} className="space-y-3.5 pt-2">
+                        <div>
+                          <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">E-mail de Acesso</label>
+                          <input
+                            type="email"
+                            required
+                            value={loginEmail}
+                            onChange={(e) => setLoginEmail(e.target.value)}
+                            placeholder="cliente@email.com"
+                            className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Senha de Acesso</label>
+                          <input
+                            type="password"
+                            required
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            placeholder="••••••"
+                            className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
+                        >
+                          Entrar na Seleção
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          );
+        })()}
 
         {/* Aba 2: Admin Dashboard */}
         {activeTab === 'admin' && (
           <AdminDashboard
             clientes={clientes}
             eventos={eventos}
+            portfolio={portfolio}
             onAddCliente={handleAddCliente}
             onAddEvento={handleAddEvento}
             onSelectEventUpload={triggerEventUpload}
@@ -606,6 +938,8 @@ export default function App() {
             onConfirmPayment={handleConfirmPayment}
             onDeleteEvento={handleDeleteEvento}
             onReopenEvento={handleReopenEvento}
+            onAddPortfolioPhoto={handleAddPortfolioPhoto}
+            onDeletePortfolioPhoto={handleDeletePortfolioPhoto}
           />
         )}
 

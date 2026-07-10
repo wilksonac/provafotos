@@ -202,6 +202,12 @@ export default function PhotoVirtualGrid({
 
   // Mapeamento dinâmico de imagem de capa premium baseado no tipo de galeria
   const coverImage = useMemo(() => {
+    // Se o fotógrafo definiu uma imagem de destaque para a capa, use ela!
+    const highlightedPhoto = (photos || []).find(p => p.destaque === true);
+    if (highlightedPhoto) {
+      return highlightedPhoto.url_storage;
+    }
+
     switch (tipoGaleria) {
       case 'casamento':
         return 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1600&auto=format&fit=crop';
@@ -215,7 +221,7 @@ export default function PhotoVirtualGrid({
       default:
         return 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=1600&auto=format&fit=crop';
     }
-  }, [tipoGaleria]);
+  }, [tipoGaleria, photos]);
 
   // Formata o rótulo legível da categoria
   const formattedCategory = useMemo(() => {

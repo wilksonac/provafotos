@@ -532,6 +532,41 @@ export default function App() {
     }
   };
 
+  // Definir foto como capa/destaque da galeria do cliente
+  const handleSetEventCover = (eventId, photoId) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const updatedPhotos = (targetEvent.fotos || []).map(p => ({
+      ...p,
+      destaque: p.id === photoId
+    }));
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { fotos: updatedPhotos })
+        .then(() => console.log("[FIREBASE] Foto de destaque definida para o evento:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao definir foto de destaque:", err));
+    } else {
+      setEventos((prev) => prev.map(evt => evt.id === eventId ? { ...evt, fotos: updatedPhotos } : evt));
+    }
+  };
+
+  // Excluir foto individual de uma galeria do cliente
+  const handleDeleteEventPhoto = (eventId, photoId) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const updatedPhotos = (targetEvent.fotos || []).filter(p => p.id !== photoId);
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { fotos: updatedPhotos })
+        .then(() => console.log("[FIREBASE] Foto removida do evento:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao remover foto:", err));
+    } else {
+      setEventos((prev) => prev.map(evt => evt.id === eventId ? { ...evt, fotos: updatedPhotos } : evt));
+    }
+  };
+
   // Redirecionamento da ação "Fazer Upload" no Dashboard
   const triggerEventUpload = (eventId) => {
     setActiveEventId(eventId);
@@ -908,6 +943,8 @@ export default function App() {
               onAddPortfolioPhoto={handleAddPortfolioPhoto}
               onDeletePortfolioPhoto={handleDeletePortfolioPhoto}
               onLogout={handleAdminLogout}
+              onSetEventCover={handleSetEventCover}
+              onDeleteEventPhoto={handleDeleteEventPhoto}
             />
           )
         )}

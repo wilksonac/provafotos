@@ -24,7 +24,9 @@ export default function AdminDashboard({
   onReopenEvento,
   onAddPortfolioPhoto,
   onDeletePortfolioPhoto,
-  onLogout
+  onLogout,
+  onSetEventCover,
+  onDeleteEventPhoto
 }) {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
   
@@ -61,11 +63,12 @@ export default function AdminDashboard({
 
   // Categoria de Galeria & Download
   const [tipoGaleria, setTipoGaleria] = useState('ensaio');
-  const [permitirDownload, setPermitirDownload] = useState(true);
+  const [permitirDownload, setPermitirDownload] = useState(false);
   const [acessoRestrito, setAcessoRestrito] = useState(false);
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
+  const [photosModalEventId, setPhotosModalEventId] = useState(null);
 
   // Estados e Handlers do Portfólio Admin
   const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
@@ -713,6 +716,12 @@ ${form.nomeFotografo}`;
                                       Reabrir
                                     </button>
                                   )}
+                                  <button
+                                    onClick={() => setPhotosModalEventId(evento.id)}
+                                    className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
+                                  >
+                                    Fotos
+                                  </button>
                                   <button
                                     onClick={() => handleOpenShareModal(evento)}
                                     className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
@@ -1597,6 +1606,125 @@ ${form.nomeFotografo}`;
           </div>
         </div>
       )}
+
+      {/* Gerenciador de Fotos da Galeria Modal */}
+      {photosModalEventId && (() => {
+        const modalEvent = eventos.find(e => e.id === photosModalEventId);
+        if (!modalEvent) return null;
+
+        const photos = modalEvent.fotos || [];
+
+        return (
+          <div 
+            className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setPhotosModalEventId(null)}
+          >
+            <div 
+              className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-stone-150 flex items-center justify-between bg-stone-50">
+                <div>
+                  <h3 className="font-serif-editorial text-lg text-stone-900">
+                    Gerenciar Fotos da Galeria
+                  </h3>
+                  <p className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mt-0.5">
+                    {modalEvent.titulo} &bull; {photos.length} fotos
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPhotosModalEventId(null)}
+                  className="text-stone-400 hover:text-stone-700 text-xl font-bold px-2 py-1"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Photos List Grid */}
+              <div className="flex-grow p-6 overflow-y-auto min-h-[300px]">
+                {photos.length === 0 ? (
+                  <div className="text-center py-16 text-stone-400 font-serif-editorial">
+                    <p className="text-base">Nenhuma foto enviada para esta galeria ainda.</p>
+                    <p className="text-xs text-stone-400/80 mt-1">Utilize o botão "Upload" no painel principal para enviar as imagens.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {photos.map((photo) => (
+                      <div 
+                        key={photo.id}
+                        className={`group relative bg-white border rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-all ${
+                          photo.destaque ? 'border-amber-400 ring-1 ring-amber-400' : 'border-stone-200'
+                        }`}
+                      >
+                        <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
+                          <img
+                            src={photo.url_storage}
+                            alt={photo.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                          
+                          {/* Destaque Badge */}
+                          {photo.destaque && (
+                            <div className="absolute top-2 left-2 bg-amber-400 text-stone-950 text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm z-10">
+                              ★ Capa
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex flex-col gap-1.5">
+                          <span className="text-[9px] font-semibold text-stone-600 truncate">{photo.name}</span>
+                          
+                          <div className="flex gap-1 pt-1 border-t border-stone-100/80 justify-between items-center">
+                            {/* Toggle Destaque Button */}
+                            {photo.destaque ? (
+                              <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Capa Ativa</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onSetEventCover(modalEvent.id, photo.id)}
+                                className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-amber-250"
+                              >
+                                Definir Capa
+                              </button>
+                            )}
+
+                            {/* Delete Photo Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Deseja realmente excluir a foto "${photo.name}" desta galeria?`)) {
+                                  onDeleteEventPhoto(modalEvent.id, photo.id);
+                                }
+                              }}
+                              className="px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-red-200"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-stone-150 bg-stone-50 flex justify-end">
+                <button
+                  onClick={() => setPhotosModalEventId(null)}
+                  className="px-5 py-2 border border-stone-200 text-stone-500 rounded text-xs font-bold uppercase tracking-widest hover:bg-stone-100 transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

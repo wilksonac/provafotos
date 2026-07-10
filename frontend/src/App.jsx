@@ -736,9 +736,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Filtros de Categoria (Menu horizontal rolável com dedão no celular) */}
-            <div className="flex justify-start sm:justify-center border-b border-stone-200 pb-2 overflow-x-auto scrollbar-none -mx-6 px-6">
-              <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
+            {/* Filtros de Categoria (Fluido e sem sobras laterais) */}
+            <div className="flex justify-center border-b border-stone-200 pb-3">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                 {[
                   { id: 'todos', label: 'Todos' },
                   { id: 'casamentos', label: 'Casamentos' },
@@ -752,7 +752,7 @@ export default function App() {
                       setPortfolioCategory(cat.id);
                       setLightboxIndex(null);
                     }}
-                    className={`px-3.5 sm:px-4 py-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded flex-shrink-0 ${
+                    className={`px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
                       portfolioCategory === cat.id
                         ? 'bg-stone-900 text-white shadow-sm'
                         : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'

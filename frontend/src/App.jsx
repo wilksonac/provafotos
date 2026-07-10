@@ -703,15 +703,18 @@ export default function App() {
             <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
               
               {/* Seção de Destaque - Hero Portfolio */}
-              <div className="text-center py-12 px-4 border border-stone-200 bg-white rounded-xl shadow-sm relative overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] [background-size:16px_16px] opacity-35"></div>
+              <div className="text-center py-16 px-6 rounded-xl shadow-sm relative overflow-hidden bg-stone-950">
+                <div 
+                  className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80')] bg-cover bg-center"
+                />
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
                 <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-                  <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Fotografia Profissional</span>
-                  <h2 className="font-serif-editorial text-4xl sm:text-5xl text-stone-900 font-light tracking-wide">
+                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-300">Fotografia Profissional</span>
+                  <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-light tracking-wide">
                     Wilkson Fotografias
                   </h2>
-                  <div className="h-px w-16 bg-stone-300 mx-auto"></div>
-                  <p className="text-stone-500 font-serif-editorial italic text-sm max-w-lg mx-auto font-light leading-relaxed">
+                  <div className="h-px w-16 bg-white/30 mx-auto"></div>
+                  <p className="text-stone-200 font-serif-editorial italic text-sm max-w-lg mx-auto font-light leading-relaxed">
                     "Capturando sentimentos sinceros, luzes naturais e momentos inesquecíveis que duram para sempre."
                   </p>
                   
@@ -719,9 +722,9 @@ export default function App() {
                   <div className="pt-2 flex items-center justify-center gap-3">
                     <button
                       onClick={() => setShowClientLogin(true)}
-                      className="px-6 py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                      className="px-6 py-2.5 bg-white hover:bg-stone-100 text-stone-900 font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md hover:shadow-lg flex items-center gap-2"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                       </svg>
                       Área do Cliente (Acessar Seleção)

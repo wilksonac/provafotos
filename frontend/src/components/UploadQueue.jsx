@@ -271,35 +271,7 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
           </h2>
         </div>
         
-        <div className="flex flex-wrap items-center gap-6">
-          {/* Concurrency Limit Control */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Lote Máximo:</span>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={concurrencyLimit}
-              onChange={(e) => setConcurrencyLimit(parseInt(e.target.value))}
-              className="w-16 accent-stone-900 cursor-pointer h-1 bg-stone-100 border border-stone-200 rounded-lg appearance-none"
-            />
-            <span className="text-xs font-bold text-stone-800 w-3">{concurrencyLimit}</span>
-          </div>
 
-          {/* Simulated Mode Toggle */}
-          <div className="flex items-center">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useMock}
-                onChange={(e) => setUseMock(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-8 h-4 bg-stone-100 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
-              <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-stone-500">Simular</span>
-            </label>
-          </div>
-        </div>
       </div>
 
       {/* Conditionally Render Success Message or Drag & Drop Area */}

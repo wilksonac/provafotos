@@ -614,6 +614,11 @@ export default function App() {
 
   const activeEvent = eventos.find((e) => e.id === activeEventId);
 
+  // Filtrar fotos do portfólio pela categoria
+  const filteredPortfolio = portfolioCategory === 'todos'
+    ? portfolio
+    : portfolio.filter((p) => p.category === portfolioCategory);
+
   // Renderização específica para link mágico (?gallery=token)
   if (activeTab === 'magic-client' && selectedGalleryToken) {
     const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
@@ -732,235 +737,102 @@ export default function App() {
       <main className="flex-grow flex flex-col p-6">
         
         {/* Aba 1: Área do Cliente - Portfólio de Fotos */}
-        {activeTab === 'client' && (() => {
-          // Filtrar fotos do portfólio pela categoria
-          const filteredPortfolio = portfolioCategory === 'todos'
-            ? portfolio
-            : portfolio.filter((p) => p.category === portfolioCategory);
-
-          return (
-            <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
-              
-              {/* Seção de Destaque - Hero Portfolio */}
-              <div className="text-center py-16 px-6 rounded-xl shadow-sm relative overflow-hidden bg-stone-950">
-                <div 
-                  className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80')] bg-cover bg-center"
-                />
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
-                <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-300">Fotografia Profissional</span>
-                  <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-light tracking-wide">
-                    Wilkson Fotografias
-                  </h2>
-                  <div className="h-px w-16 bg-white/30 mx-auto"></div>
-                  <p className="text-stone-200 font-serif-editorial italic text-sm max-w-lg mx-auto font-light leading-relaxed">
-                    "Capturando sentimentos sinceros, luzes naturais e momentos inesquecíveis que duram para sempre."
-                  </p>
-                  
-                  {/* Botões de Acesso Rápido */}
-                  <div className="pt-2 flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => setShowClientLogin(true)}
-                      className="px-6 py-2.5 bg-white hover:bg-stone-100 text-stone-900 font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md hover:shadow-lg flex items-center gap-2"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                      </svg>
-                      Área do Cliente (Acessar Seleção)
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Filtros de Categoria */}
-              <div className="flex justify-center border-b border-stone-200 pb-2">
-                <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
-                  {[
-                    { id: 'todos', label: 'Todos' },
-                    { id: 'casamentos', label: 'Casamentos' },
-                    { id: 'infantil', label: 'Infantil' },
-                    { id: 'formatura', label: 'Formaturas' },
-                    { id: 'corporativo', label: 'Corporativo' }
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => {
-                        setPortfolioCategory(cat.id);
-                        setLightboxIndex(null);
-                      }}
-                      className={`px-4 py-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-                        portfolioCategory === cat.id
-                          ? 'bg-stone-900 text-white shadow-sm'
-                          : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid de Portfólio */}
-              {filteredPortfolio.length === 0 ? (
-                <div className="text-center py-20 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
-                  <p className="text-sm">Nenhuma foto cadastrada nesta categoria de portfólio.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  {filteredPortfolio.map((photo, index) => (
-                    <div
-                      key={photo.id}
-                      onClick={() => setLightboxIndex(index)}
-                      className="group cursor-pointer bg-white border border-stone-205 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300"
-                    >
-                      <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
-                        <img
-                          src={photo.url}
-                          alt={photo.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ease-out"
-                          loading="lazy"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                          <span className="text-[9px] text-white uppercase tracking-widest font-bold">Zoom da Imagem</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Modal Lightbox */}
-              {lightboxIndex !== null && filteredPortfolio[lightboxIndex] && (
-                <div 
-                  className="fixed inset-0 bg-stone-950/95 z-50 flex items-center justify-center p-4 backdrop-blur-md"
-                  onClick={() => setLightboxIndex(null)}
-                >
-                  {/* Botão Fechar */}
+        {activeTab === 'client' && (
+          <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
+            
+            {/* Seção de Destaque - Hero Portfolio */}
+            <div className="text-center py-16 px-6 rounded-xl shadow-sm relative overflow-hidden bg-stone-950">
+              <div 
+                className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80')] bg-cover bg-center"
+              />
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
+              <div className="relative z-10 max-w-2xl mx-auto space-y-4">
+                <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-300">Fotografia Profissional</span>
+                <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-light tracking-wide">
+                  Wilkson Fotografias
+                </h2>
+                <div className="h-px w-16 bg-white/30 mx-auto"></div>
+                <p className="text-stone-200 font-serif-editorial italic text-sm max-w-lg mx-auto font-light leading-relaxed">
+                  "Capturando sentimentos sinceros, luzes naturais e momentos inesquecíveis que duram para sempre."
+                </p>
+                
+                {/* Botões de Acesso Rápido */}
+                <div className="pt-2 flex items-center justify-center gap-3">
                   <button
-                    onClick={() => setLightboxIndex(null)}
-                    className="absolute top-4 right-4 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/60 rounded-full transition-all"
+                    onClick={() => {
+                      console.log("[PORTFOLIO] Clicou em Área do Cliente - Abrindo Modal");
+                      setShowClientLogin(true);
+                    }}
+                    className="px-6 py-2.5 bg-white hover:bg-stone-100 text-stone-900 font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md hover:shadow-lg flex items-center gap-2"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                     </svg>
+                    Área do Cliente (Acessar Seleção)
                   </button>
-
-                  {/* Imagem Principal */}
-                  <div className="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                    <img
-                      src={filteredPortfolio[lightboxIndex].url}
-                      alt={filteredPortfolio[lightboxIndex].name}
-                      className="max-w-full max-h-[85vh] object-contain rounded shadow-2xl"
-                    />
-                    
-                    {/* Botão Anterior */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLightboxIndex((prev) => (prev > 0 ? prev - 1 : filteredPortfolio.length - 1));
-                      }}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/>
-                      </svg>
-                    </button>
-
-                    {/* Botão Próximo */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLightboxIndex((prev) => (prev < filteredPortfolio.length - 1 ? prev + 1 : 0));
-                      }}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
-                      </svg>
-                    </button>
-                  </div>
                 </div>
-              )}
+              </div>
+            </div>
 
-              {/* Modal de Login (Área do Cliente) */}
-              {showClientLogin && (
-                <div 
-                  className="fixed inset-0 bg-stone-950/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm"
-                  onClick={() => {
-                    setShowClientLogin(false);
-                    setLoginError('');
-                  }}
-                >
-                  <div 
-                    className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative"
-                    onClick={(e) => e.stopPropagation()}
+            {/* Filtros de Categoria */}
+            <div className="flex justify-center border-b border-stone-200 pb-2">
+              <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
+                {[
+                  { id: 'todos', label: 'Todos' },
+                  { id: 'casamentos', label: 'Casamentos' },
+                  { id: 'infantil', label: 'Infantil' },
+                  { id: 'formatura', label: 'Formaturas' },
+                  { id: 'corporativo', label: 'Corporativo' }
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setPortfolioCategory(cat.id);
+                      setLightboxIndex(null);
+                    }}
+                    className={`px-4 py-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
+                      portfolioCategory === cat.id
+                        ? 'bg-stone-900 text-white shadow-sm'
+                        : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'
+                    }`}
                   >
-                    {/* Botão Fechar */}
-                    <button
-                      onClick={() => {
-                        setShowClientLogin(false);
-                        setLoginError('');
-                      }}
-                      className="absolute top-4 right-4 text-stone-400 hover:text-stone-700"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                    </button>
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Acesso Restrito</span>
-                        <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Área do Cliente</h3>
-                        <p className="text-[11px] text-stone-400 mt-1">Digite seu e-mail e senha de acesso enviados pelo fotógrafo.</p>
+            {/* Grid de Portfólio */}
+            {filteredPortfolio.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
+                <p className="text-sm">Nenhuma foto cadastrada nesta categoria de portfólio.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {filteredPortfolio.map((photo, index) => (
+                  <div
+                    key={photo.id}
+                    onClick={() => setLightboxIndex(index)}
+                    className="group cursor-pointer bg-white border border-stone-205 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ease-out"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-stone-950/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                        <span className="text-[9px] text-white uppercase tracking-widest font-bold">Zoom da Imagem</span>
                       </div>
-
-                      {loginError && (
-                        <div className="bg-red-50 border border-red-250 text-red-650 text-[10px] px-3 py-2 rounded-lg text-center font-semibold">
-                          {loginError}
-                        </div>
-                      )}
-
-                      <form onSubmit={handleGeneralLogin} className="space-y-3.5 pt-2">
-                        <div>
-                          <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">E-mail de Acesso</label>
-                          <input
-                            type="email"
-                            required
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            placeholder="cliente@email.com"
-                            className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Senha de Acesso</label>
-                          <input
-                            type="password"
-                            required
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                            placeholder="••••••"
-                            className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
-                        >
-                          Entrar na Seleção
-                        </button>
-                      </form>
                     </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
-            </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Aba 2: Admin Dashboard */}
         {activeTab === 'admin' && (
@@ -1065,6 +937,134 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Modals rendered at root to avoid stacking context/scrolling issues */}
+      {lightboxIndex !== null && filteredPortfolio[lightboxIndex] && (
+        <div 
+          className="fixed inset-0 bg-stone-950/95 z-[99999] flex items-center justify-center p-4 backdrop-blur-md animate-fade-in"
+          onClick={() => setLightboxIndex(null)}
+        >
+          {/* Botão Fechar */}
+          <button
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-4 right-4 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/60 rounded-full transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+
+          {/* Imagem Principal */}
+          <div className="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={filteredPortfolio[lightboxIndex].url}
+              alt={filteredPortfolio[lightboxIndex].name}
+              className="max-w-full max-h-[85vh] object-contain rounded shadow-2xl"
+            />
+            
+            {/* Botão Anterior */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => (prev > 0 ? prev - 1 : filteredPortfolio.length - 1));
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+
+            {/* Botão Próximo */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => (prev < filteredPortfolio.length - 1 ? prev + 1 : 0));
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-stone-300 focus:outline-none p-2 bg-stone-900/40 hover:bg-stone-900/70 rounded-full transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showClientLogin && (
+        <div 
+          className="fixed inset-0 bg-stone-950/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => {
+            setShowClientLogin(false);
+            setLoginError('');
+          }}
+        >
+          <div 
+            className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botão Fechar */}
+            <button
+              onClick={() => {
+                setShowClientLogin(false);
+                setLoginError('');
+              }}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Acesso Restrito</span>
+                <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Área do Cliente</h3>
+                <p className="text-[11px] text-stone-400 mt-1">Digite seu e-mail e senha de acesso enviados pelo fotógrafo.</p>
+              </div>
+
+              {loginError && (
+                <div className="bg-red-50 border border-red-250 text-red-650 text-[10px] px-3 py-2 rounded-lg text-center font-semibold">
+                  {loginError}
+                </div>
+              )}
+
+              <form onSubmit={handleGeneralLogin} className="space-y-3.5 pt-2">
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">E-mail de Acesso</label>
+                  <input
+                    type="email"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="cliente@email.com"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Senha de Acesso</label>
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
+                >
+                  Entrar na Seleção
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

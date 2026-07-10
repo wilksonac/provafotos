@@ -668,13 +668,13 @@ ${form.nomeFotografo}`;
                                     <div className="flex flex-col items-start gap-1">
                                       <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
                                         computedStatus === 'finalizada'
-                                          ? 'bg-stone-100 border-stone-250 text-stone-600'
+                                          ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
                                           : computedStatus === 'expirada'
                                           ? 'bg-rose-50 border-rose-200 text-rose-700'
-                                          : 'bg-emerald-50 border-emerald-250 text-emerald-700'
+                                          : 'bg-amber-50 border-amber-250 text-amber-700'
                                       }`}>
                                         {computedStatus === 'finalizada' ? 'Finalizada' :
-                                         computedStatus === 'expirada' ? 'Expirada' : 'Aberta'}
+                                         computedStatus === 'expirada' ? 'Expirada' : 'Em Aberto'}
                                       </span>
                                       
                                       {computedStatus === 'finalizada' && hasExtras && (
@@ -1291,10 +1291,10 @@ ${form.nomeFotografo}`;
             )}
           </div>
 
-          {/* Data do Ensaio */}
+          {/* Prazo Limite */}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-              Data do Ensaio
+              Prazo Limite
             </label>
             <input
               type="date"

@@ -24,6 +24,20 @@ export default function AdminDashboard({
 }) {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
   
+  // Calcular métricas do Firebase (Cotas Gratuitas)
+  const totalStorageBytes = eventos.reduce((sum, evt) => {
+    return sum + (evt.fotos || []).reduce((fSum, f) => fSum + (f.size || 150 * 1024), 0);
+  }, 0);
+  
+  const storagePercentage = Math.min(100, (totalStorageBytes / (5 * 1024 * 1024 * 1024)) * 100).toFixed(1);
+  
+  const totalBandwidthBytes = eventos.reduce((sum, evt) => {
+    const eventPhotosSize = (evt.fotos || []).reduce((fSum, f) => fSum + (f.size || 150 * 1024), 0);
+    return sum + (evt.views || 0) * eventPhotosSize;
+  }, 0);
+  
+  const bandwidthPercentage = Math.min(100, (totalBandwidthBytes / (1 * 1024 * 1024 * 1024)) * 100).toFixed(1);
+  
   // Form states
   const [clientForm, setClientForm] = useState({ nome: '', email: '', telefone: '', senha: '' });
   const [galleryForm, setGalleryForm] = useState({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
@@ -321,6 +335,71 @@ ${form.nomeFotografo}`;
       {/* Sub-tab 1: Overview (Galerias) */}
       {activeSubTab === 'overview' && (
         <div className="animate-scale-in">
+          {/* Dashboard de Monitoramento do Firebase (Cotas Gratuitas) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Card 1: Storage */}
+            <div className="bg-white border border-stone-200/80 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Armazenamento (Storage)</h4>
+                  <p className="text-xl font-serif-editorial text-stone-900 mt-1 font-light">
+                    {totalStorageBytes < 1024 * 1024
+                      ? `${(totalStorageBytes / 1024).toFixed(1)} KB`
+                      : totalStorageBytes < 1024 * 1024 * 1024
+                        ? `${(totalStorageBytes / (1024 * 1024)).toFixed(1)} MB`
+                        : `${(totalStorageBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`}
+                    <span className="text-xs text-stone-450 font-sans ml-1.5 font-normal">de 5.0 GB</span>
+                  </p>
+                </div>
+                <span className="text-xs font-mono font-bold text-stone-900 bg-stone-50 border border-stone-200 px-2 py-0.5 rounded">
+                  {storagePercentage}%
+                </span>
+              </div>
+              <div className="w-full bg-stone-100 rounded-full h-2 overflow-hidden border border-stone-200/30">
+                <div 
+                  className={`h-full transition-all duration-1000 ${
+                    parseFloat(storagePercentage) > 80 ? 'bg-red-500' : parseFloat(storagePercentage) > 50 ? 'bg-amber-500' : 'bg-stone-900'
+                  }`}
+                  style={{ width: `${storagePercentage}%` }}
+                ></div>
+              </div>
+              <p className="text-[8px] text-stone-400 uppercase tracking-wider mt-2.5">
+                Espaço em disco ocupado pelas miniaturas no Firebase Storage.
+              </p>
+            </div>
+
+            {/* Card 2: Bandwidth */}
+            <div className="bg-white border border-stone-200/80 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Tráfego Estimado (Banda Diária)</h4>
+                  <p className="text-xl font-serif-editorial text-stone-900 mt-1 font-light">
+                    {totalBandwidthBytes < 1024 * 1024
+                      ? `${(totalBandwidthBytes / 1024).toFixed(1)} KB`
+                      : totalBandwidthBytes < 1024 * 1024 * 1024
+                        ? `${(totalBandwidthBytes / (1024 * 1024)).toFixed(1)} MB`
+                        : `${(totalBandwidthBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`}
+                    <span className="text-xs text-stone-450 font-sans ml-1.5 font-normal">de 1.0 GB/dia</span>
+                  </p>
+                </div>
+                <span className="text-xs font-mono font-bold text-stone-900 bg-stone-50 border border-stone-200 px-2 py-0.5 rounded">
+                  {bandwidthPercentage}%
+                </span>
+              </div>
+              <div className="w-full bg-stone-100 rounded-full h-2 overflow-hidden border border-stone-200/30">
+                <div 
+                  className={`h-full transition-all duration-1000 ${
+                    parseFloat(bandwidthPercentage) > 80 ? 'bg-red-500' : parseFloat(bandwidthPercentage) > 50 ? 'bg-amber-500' : 'bg-stone-900'
+                  }`}
+                  style={{ width: `${bandwidthPercentage}%` }}
+                ></div>
+              </div>
+              <p className="text-[8px] text-stone-400 uppercase tracking-wider mt-2.5">
+                Banda consumida pelos clientes ao acessar e carregar as galerias.
+              </p>
+            </div>
+          </div>
+
           {eventos.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-stone-200 rounded-xl bg-stone-50/20 text-stone-400 font-serif-editorial">
               <p className="text-lg">Nenhuma galeria cadastrada.</p>

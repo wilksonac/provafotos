@@ -97,7 +97,8 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
           onUploadSuccess({
             id: item.id,
             name: item.name,
-            url: finalUrl
+            url: finalUrl,
+            size: item.totalBytes
           });
         }
       } else {
@@ -158,7 +159,8 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
               onUploadSuccess({
                 id: item.id,
                 name: item.name,
-                url: downloadURL
+                url: downloadURL,
+                size: item.totalBytes
               });
             }
           });

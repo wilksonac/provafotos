@@ -166,6 +166,31 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
 
+  // Controla contagem de visualizações do evento para estimativa de banda de tráfego
+  useEffect(() => {
+    if (activeTab === 'magic-client' && selectedGalleryToken) {
+      const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
+      if (matchedEvent) {
+        // Se acesso for restrito, conta apenas quando estiver autenticado
+        const isAuth = !matchedEvent.acesso_restrito || authenticatedGalleries[matchedEvent.id];
+        if (isAuth) {
+          const viewedSessionKey = `viewed_${matchedEvent.id}`;
+          if (!sessionStorage.getItem(viewedSessionKey)) {
+            sessionStorage.setItem(viewedSessionKey, 'true');
+            if (db) {
+              const currentViews = matchedEvent.views || 0;
+              updateDoc(doc(db, "eventos", matchedEvent.id), { views: currentViews + 1 })
+                .then(() => console.log("[FIREBASE] Visualização incrementada:", matchedEvent.id))
+                .catch(err => console.error("[FIREBASE] Erro ao incrementar views:", err));
+            } else {
+              setEventos(prev => prev.map(e => e.id === matchedEvent.id ? { ...e, views: (e.views || 0) + 1 } : e));
+            }
+          }
+        }
+      }
+    }
+  }, [activeTab, selectedGalleryToken, authenticatedGalleries, eventos]);
+
   // Handlers para Clientes (Retorna o cliente recém criado para vinculação síncrona inline)
   const handleAddCliente = (newClientData) => {
     const newClient = {
@@ -247,6 +272,7 @@ export default function App() {
       id: uploadedFileData.id,
       name: uploadedFileData.name,
       url_storage: uploadedFileData.url,
+      size: uploadedFileData.size || 150 * 1024, // 150KB default fallback
       selecionada: false
     };
 

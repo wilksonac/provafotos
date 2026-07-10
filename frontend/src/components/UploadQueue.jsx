@@ -107,18 +107,84 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
     };
   }, [updateFileState, onUploadSuccess]);
 
-  const realFirebaseUpload = useCallback((item) => {
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1200; // Resolução otimizada para visualização rápida no site
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                blob.name = file.name;
+                resolve(blob);
+              } else {
+                resolve(file);
+              }
+            },
+            'image/jpeg',
+            0.7
+          );
+        } catch (e) {
+          console.error("Erro na compressão local da imagem:", e);
+          resolve(file);
+        }
+      };
+      img.onerror = () => resolve(file);
+      img.src = event.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
+  const realFirebaseUpload = useCallback(async (item) => {
     if (!storage || !ref || !uploadBytesResumable || !getDownloadURL) {
       updateFileState(item.id, {
         status: 'failed',
-        error: "Firebase Storage não configurado. Ative 'Simular Upload' para testes."
+        error: "Firebase Storage não configurado."
       });
       return;
     }
 
     try {
+      // Mostra progresso inicial indicando compressão
+      updateFileState(item.id, { status: 'uploading', progress: 5 });
+      
+      console.log(`[UPLOAD] Comprimindo imagem localmente: ${item.name}`);
+      const fileToUpload = await compressImage(item.file);
+      console.log(`[UPLOAD] Compressão concluída: ${formatBytes(item.file.size)} -> ${formatBytes(fileToUpload.size)}`);
+
       const storageRef = ref(storage, `eventos/${eventId}/${Date.now()}_${item.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, item.file);
+      const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
       
       uploadTasksRef.current[item.id] = uploadTask;
 
@@ -127,12 +193,13 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
         (snapshot) => {
           const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
           updateFileState(item.id, {
-            progress,
+            progress: Math.max(5, progress), // Garante que a barra ande
             bytesTransferred: snapshot.bytesTransferred,
             totalBytes: snapshot.totalBytes
           });
         },
         (error) => {
+          console.error(`[UPLOAD] ❌ Falha no envio de ${item.name}:`, error);
           updateFileState(item.id, {
             status: 'failed',
             error: error.message
@@ -150,13 +217,14 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
                 id: item.id,
                 name: item.name,
                 url: downloadURL,
-                size: item.totalBytes
+                size: fileToUpload.size
               });
             }
           });
         }
       );
     } catch (err) {
+      console.error(`[UPLOAD] ❌ Erro inesperado em ${item.name}:`, err);
       updateFileState(item.id, {
         status: 'failed',
         error: err.message
@@ -406,6 +474,11 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
                       <span className="text-xs font-semibold text-stone-800 truncate pr-3">{item.name}</span>
                       <span className="text-[9px] text-stone-400 font-bold">{formatBytes(item.size)}</span>
                     </div>
+                    {isFailed && item.error && (
+                      <div className="text-[9px] text-red-500 font-medium mb-1 line-clamp-2">
+                        Erro: {item.error}
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <div className="flex-grow bg-stone-100 rounded-full h-1 overflow-hidden">

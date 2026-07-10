@@ -517,10 +517,16 @@ export default function App() {
 
   // Excluir foto do portfólio
   const handleDeletePortfolioPhoto = (photoId) => {
+    console.log("[PORTFOLIO] Tentando excluir foto do banco de dados com ID:", photoId);
     if (db) {
       deleteDoc(doc(db, "portfolio", photoId))
-        .then(() => console.log("[FIREBASE] Foto do portfólio deletada:", photoId))
-        .catch(err => console.error("[FIREBASE] Erro ao deletar foto do portfólio:", err));
+        .then(() => {
+          console.log("[FIREBASE] Foto do portfólio deletada do Firestore:", photoId);
+        })
+        .catch(err => {
+          console.error("[FIREBASE] Erro ao deletar foto do portfólio no Firestore:", err);
+          alert(`Erro ao excluir foto do Firestore: ${err.message}\nVerifique se o seu IP está liberado ou se as regras de segurança do seu Firestore permitem gravação.`);
+        });
     } else {
       setPortfolio((prev) => prev.filter((p) => p.id !== photoId));
     }

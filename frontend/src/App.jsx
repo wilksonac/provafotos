@@ -654,14 +654,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200 overflow-x-hidden">
       
-      {/* Cabeçalho */}
-      <header className="bg-white border-b border-stone-200 px-4 sm:px-6 py-3 flex flex-row items-center justify-between gap-2 shadow-xs">
+      {/* Cabeçalho Fixo Translúcido (Sticky Glassmorphic) */}
+      <header className="sticky top-0 z-[50] bg-[#FAF9F6]/80 backdrop-blur-md border-b border-stone-200/60 px-4 sm:px-6 py-3.5 flex flex-row items-center justify-between gap-2 shadow-[0_2px_15px_-3px_rgba(28,25,23,0.02)]">
         <div className="flex items-center gap-2">
           <div className="w-6.5 h-6.5 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-xs tracking-widest shadow-xs flex-shrink-0">
             W
           </div>
           <div className="min-w-0">
-            <h1 className="font-serif-editorial text-xs sm:text-sm font-semibold tracking-widest text-stone-900 uppercase truncate">WILKSON FOTOGRAFIAS</h1>
+            <h1 className="font-serif-editorial text-[10px] sm:text-[11px] font-medium tracking-[0.25em] text-stone-900 uppercase truncate">
+              WILKSON FOTOGRAFIAS
+            </h1>
           </div>
         </div>
 
@@ -770,23 +772,22 @@ export default function App() {
                 <p className="text-sm">Nenhuma foto cadastrada nesta categoria de portfólio.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
+              <div className="columns-2 md:columns-3 gap-4 sm:gap-6 space-y-4 sm:space-y-6">
                 {filteredPortfolio.map((photo, index) => (
                   <div
                     key={photo.id}
                     onClick={() => setLightboxIndex(index)}
-                    className="group cursor-pointer bg-white border border-stone-205 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300"
+                    className="break-inside-avoid inline-block w-full group cursor-pointer bg-white border border-stone-200/60 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 animate-reveal"
+                    style={{ animationDelay: `${index * 80}ms` }}
                   >
-                    <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
+                    <div className="w-full bg-stone-50 overflow-hidden relative">
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ease-out"
+                        className="w-full h-auto object-cover group-hover:scale-[1.02] transition-all duration-500 ease-out"
                         loading="lazy"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-stone-950/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                        <span className="text-[9px] text-white uppercase tracking-widest font-bold">Zoom da Imagem</span>
-                      </div>
+                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </div>
                   </div>
                 ))}

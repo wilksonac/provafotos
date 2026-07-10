@@ -67,3 +67,20 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Elegant scroll/fade reveal animation for photos */
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-reveal {
+  opacity: 0;
+  animation: revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

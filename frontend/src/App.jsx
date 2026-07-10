@@ -686,13 +686,7 @@ export default function App() {
 
     return (
       <div className="min-h-screen flex flex-col">
-        {/* Link para voltar ao painel de testes (Apenas visível em modo sandbox) */}
-        <div className="bg-stone-100 border-b border-stone-200 px-8 py-2 flex items-center justify-between text-xs text-stone-500">
-          <span>Modo Link Mágico Ativo &bull; Dados persistidos no LocalStorage</span>
-          <button onClick={handleBackToWorkspace} className="underline hover:text-stone-900 font-bold uppercase tracking-wider text-[10px]">
-            [ Voltar para Painel Admin ]
-          </button>
-        </div>
+
         
         <div className="flex-grow">
           <PhotoVirtualGrid

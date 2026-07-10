@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-let storage = null;
-let ref = null;
-let uploadBytesResumable = null;
-let getDownloadURL = null;
-
-try {
-  // Configured in production:
-  // import { storage } from '../services/firebase';
-  // import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-} catch (e) {
-  console.warn("Firebase Storage fallback mode initialized.");
-}
+import { storage } from '../lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 const formatBytes = (bytes, decimals = 2) => {
   if (bytes === 0) return '0 Bytes';
@@ -25,7 +15,7 @@ const formatBytes = (bytes, decimals = 2) => {
 export default function UploadQueue({ eventId = 'mock_event_123', onUploadSuccess, onFinished }) {
   const [queue, setQueue] = useState([]);
   const [concurrencyLimit, setConcurrencyLimit] = useState(5);
-  const [useMock, setUseMock] = useState(true); 
+  const [useMock, setUseMock] = useState(!storage); 
   const [isDragging, setIsDragging] = useState(false);
 
   const uploadTasksRef = useRef({});

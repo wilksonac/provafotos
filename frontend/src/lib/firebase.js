@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,13 +19,15 @@ console.log("[FIREBASE] authDomain:", firebaseConfig.authDomain || "❌ NÃO DEF
 let app;
 let db = null;
 let auth = null;
+let storage = null;
 
 if (firebaseConfig.projectId) {
   try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
-    console.log("[FIREBASE] ✅ db e auth inicializados com sucesso.");
+    storage = getStorage(app);
+    console.log("[FIREBASE] ✅ db, auth e storage inicializados com sucesso.");
   } catch (error) {
     console.error("[FIREBASE] ❌ Erro ao inicializar:", error.message);
   }
@@ -32,4 +35,4 @@ if (firebaseConfig.projectId) {
   console.warn("[FIREBASE] ❌ projectId ausente — Firebase não inicializado.");
 }
 
-export { db, auth };
+export { db, auth, storage };

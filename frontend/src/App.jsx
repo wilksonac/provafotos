@@ -4,7 +4,7 @@ import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
 import { db, auth } from './lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
 // Dados iniciais de fallback
@@ -272,9 +272,8 @@ export default function App() {
     };
 
     if (db) {
-      const updatedPhotos = [...(targetEvent.fotos || []), newPhoto];
-      updateDoc(doc(db, "eventos", activeEventId), { fotos: updatedPhotos })
-        .then(() => console.log("[FIREBASE] Foto vinculada ao evento:", activeEventId))
+      updateDoc(doc(db, "eventos", activeEventId), { fotos: arrayUnion(newPhoto) })
+        .then(() => console.log("[FIREBASE] Foto vinculada ao evento via arrayUnion:", activeEventId))
         .catch(err => console.error("[FIREBASE] Erro ao vincular foto:", err));
     } else {
       setEventos((prevEventos) =>

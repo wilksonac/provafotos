@@ -11,6 +11,10 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+// Diagnóstico: loga quais variáveis estão presentes
+console.log("[FIREBASE] projectId:", firebaseConfig.projectId || "❌ NÃO DEFINIDO");
+console.log("[FIREBASE] authDomain:", firebaseConfig.authDomain || "❌ NÃO DEFINIDO");
+
 let app;
 let db = null;
 let auth = null;
@@ -20,12 +24,12 @@ if (firebaseConfig.projectId) {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
-    console.log("[FIREBASE] Inicializado com sucesso para o projeto:", firebaseConfig.projectId);
+    console.log("[FIREBASE] ✅ db e auth inicializados com sucesso.");
   } catch (error) {
-    console.error("[FIREBASE] Erro ao inicializar o Firebase:", error);
+    console.error("[FIREBASE] ❌ Erro ao inicializar:", error.message);
   }
 } else {
-  console.warn("[FIREBASE] Configurações do Firebase não encontradas no ambiente.");
+  console.warn("[FIREBASE] ❌ projectId ausente — Firebase não inicializado.");
 }
 
 export { db, auth };

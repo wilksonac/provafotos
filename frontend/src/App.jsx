@@ -538,9 +538,10 @@ export default function App() {
     e.preventDefault();
     setLoginError('');
 
-    // Achar cliente pelo email e senha
+    // Achar cliente pelo email e senha (com conversão segura para string e trim)
     const client = clientes.find(
-      (c) => c.email.toLowerCase() === loginEmail.toLowerCase().trim() && c.senha === loginPassword
+      (c) => c.email.toLowerCase() === loginEmail.toLowerCase().trim() && 
+             String(c.senha || '').trim() === String(loginPassword || '').trim()
     );
 
     if (!client) {
@@ -647,29 +648,28 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200">
       
-      {/* Cabeçalho do Workspace Sandbox */}
-      <header className="bg-white border-b border-stone-200 px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-base tracking-widest shadow-sm">
+      {/* Cabeçalho */}
+      <header className="bg-white border-b border-stone-200 px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-xs tracking-widest shadow-xs">
             W
           </div>
           <div>
-            <h1 className="font-serif-editorial text-lg font-normal tracking-widest text-stone-900">WILKSON FOTOGRAFIAS</h1>
-            <p className="text-[9px] text-stone-400 uppercase tracking-widest font-semibold mt-0.5">Plataforma de Seleção &bull; Banco de Dados LocalStorage</p>
+            <h1 className="font-serif-editorial text-sm font-semibold tracking-widest text-stone-900 uppercase">WILKSON FOTOGRAFIAS</h1>
           </div>
         </div>
 
-        {/* Abas Superiores de Controle & Botão de Reset de Testes */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60">
+        {/* Abas Superiores de Controle */}
+        <div className="flex items-center gap-2">
+          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50">
             <button
               onClick={() => {
                 setActiveTab('client');
                 setSelectedGalleryToken(null);
               }}
-              className={`px-5 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+              className={`px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'client'
-                  ? 'bg-stone-900 text-white shadow-sm'
+                  ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
@@ -677,29 +677,15 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveTab('admin')}
-              className={`px-5 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+              className={`px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'admin' || activeTab === 'uploader'
-                  ? 'bg-stone-900 text-white shadow-sm'
+                  ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
               Painel Admin
             </button>
           </div>
-
-          <button
-            onClick={() => {
-              if (confirm("Atenção: Isso apagará permanentemente todas as galerias de fotos, cadastros de clientes e seleções salvas no LocalStorage do seu navegador. Deseja prosseguir?")) {
-                localStorage.clear();
-                sessionStorage.clear();
-                window.location.reload();
-              }
-            }}
-            className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-650 hover:text-red-700 rounded text-[10px] font-bold uppercase tracking-widest transition-all"
-            title="Apagar todos os dados locais do sandbox e recomeçar do zero"
-          >
-            Resetar Banco
-          </button>
         </div>
       </header>
 
@@ -856,8 +842,17 @@ export default function App() {
 
               {/* Modal de Login (Área do Cliente) */}
               {showClientLogin && (
-                <div className="fixed inset-0 bg-stone-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-                  <div className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative">
+                <div 
+                  className="fixed inset-0 bg-stone-950/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm"
+                  onClick={() => {
+                    setShowClientLogin(false);
+                    setLoginError('');
+                  }}
+                >
+                  <div 
+                    className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {/* Botão Fechar */}
                     <button
                       onClick={() => {
@@ -987,7 +982,7 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
     }
 
     const emailMatch = client.email.trim().toLowerCase() === email.trim().toLowerCase();
-    const passwordMatch = (client.senha || '') === password;
+    const passwordMatch = String(client.senha || '').trim() === String(password || '').trim();
 
     if (emailMatch && passwordMatch) {
       onLoginSuccess();

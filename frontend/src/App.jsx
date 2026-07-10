@@ -102,6 +102,12 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  // Estados de Autenticação do Administrador
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => sessionStorage.getItem('admin_auth') === 'true');
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+
   // Controle de autenticação para galerias restritas (Login + Senha)
   const [authenticatedGalleries, setAuthenticatedGalleries] = useState(() => {
     try {
@@ -573,6 +579,33 @@ export default function App() {
     window.history.pushState({}, '', '/');
   };
 
+  // Autenticação do Administrador
+  const handleAdminLoginSubmit = (e) => {
+    e.preventDefault();
+    setAdminLoginError('');
+
+    const targetUser = (import.meta.env.VITE_ADMIN_USER || 'admin').trim().toLowerCase();
+    const targetPassword = (import.meta.env.VITE_ADMIN_PASSWORD || 'wilkson2026').trim();
+
+    if (
+      adminUser.trim().toLowerCase() === targetUser &&
+      adminPassword.trim() === targetPassword
+    ) {
+      setIsAdminAuthenticated(true);
+      sessionStorage.setItem('admin_auth', 'true');
+      setAdminUser('');
+      setAdminPassword('');
+    } else {
+      setAdminLoginError('Usuário ou senha administrativa incorretos.');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    sessionStorage.removeItem('admin_auth');
+    setActiveTab('client'); // Retorna para o portfólio público ao deslogar
+  };
+
   const activeEvent = eventos.find((e) => e.id === activeEventId);
 
   // Renderização específica para link mágico (?gallery=token)
@@ -925,20 +958,80 @@ export default function App() {
 
         {/* Aba 2: Admin Dashboard */}
         {activeTab === 'admin' && (
-          <AdminDashboard
-            clientes={clientes}
-            eventos={eventos}
-            portfolio={portfolio}
-            onAddCliente={handleAddCliente}
-            onAddEvento={handleAddEvento}
-            onSelectEventUpload={triggerEventUpload}
-            onSelectEventView={triggerEventView}
-            onConfirmPayment={handleConfirmPayment}
-            onDeleteEvento={handleDeleteEvento}
-            onReopenEvento={handleReopenEvento}
-            onAddPortfolioPhoto={handleAddPortfolioPhoto}
-            onDeletePortfolioPhoto={handleDeletePortfolioPhoto}
-          />
+          !isAdminAuthenticated ? (
+            <div className="flex-grow flex items-center justify-center py-12 px-4 animate-scale-in">
+              <div className="bg-stone-900 border border-stone-850 text-white rounded-xl shadow-2xl max-w-sm w-full p-8 relative overflow-hidden">
+                {/* Visual decoration overlay */}
+                <div className="absolute inset-0 bg-[radial-gradient(#333_1px,transparent_1px)] [background-size:20px_20px] opacity-25"></div>
+                
+                <div className="relative z-10 space-y-6">
+                  <div className="text-center">
+                    <div className="w-10 h-10 bg-white/10 rounded flex items-center justify-center font-serif text-white font-light text-sm tracking-widest shadow-sm mx-auto mb-3">
+                      W
+                    </div>
+                    <span className="text-[9px] font-bold tracking-widest uppercase text-stone-400">Acesso Restrito</span>
+                    <h3 className="font-serif-editorial text-2xl text-white font-light mt-1">Painel do Fotógrafo</h3>
+                    <p className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest">Identifique-se para gerenciar galerias</p>
+                  </div>
+
+                  {adminLoginError && (
+                    <div className="bg-red-950/80 border border-red-800 text-red-300 text-[10px] px-3.5 py-2.5 rounded-lg text-center font-semibold">
+                      {adminLoginError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAdminLoginSubmit} className="space-y-4 pt-1">
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Usuário Admin</label>
+                      <input
+                        type="text"
+                        required
+                        value={adminUser}
+                        onChange={(e) => setAdminUser(e.target.value)}
+                        placeholder="admin"
+                        className="w-full px-3.5 py-2.5 border border-stone-800 rounded-lg text-xs font-sans focus:outline-none focus:border-white bg-stone-950/80 text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Senha Administrativa</label>
+                      <input
+                        type="password"
+                        required
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="••••••"
+                        className="w-full px-3.5 py-2.5 border border-stone-800 rounded-lg text-xs font-sans focus:outline-none focus:border-white bg-stone-950/80 text-white"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-white hover:bg-stone-100 text-stone-900 font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md mt-2"
+                    >
+                      Acessar Painel
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <AdminDashboard
+              clientes={clientes}
+              eventos={eventos}
+              portfolio={portfolio}
+              onAddCliente={handleAddCliente}
+              onAddEvento={handleAddEvento}
+              onSelectEventUpload={triggerEventUpload}
+              onSelectEventView={triggerEventView}
+              onConfirmPayment={handleConfirmPayment}
+              onDeleteEvento={handleDeleteEvento}
+              onReopenEvento={handleReopenEvento}
+              onAddPortfolioPhoto={handleAddPortfolioPhoto}
+              onDeletePortfolioPhoto={handleDeletePortfolioPhoto}
+              onLogout={handleAdminLogout}
+            />
+          )
         )}
 
         {/* Aba 3: Upload Queue Uploader Específico */}

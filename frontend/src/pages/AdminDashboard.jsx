@@ -23,7 +23,8 @@ export default function AdminDashboard({
   onDeleteEvento,
   onReopenEvento,
   onAddPortfolioPhoto,
-  onDeletePortfolioPhoto
+  onDeletePortfolioPhoto,
+  onLogout
 }) {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
   
@@ -399,6 +400,14 @@ ${form.nomeFotografo}`;
           >
             Portfólio
           </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded bg-red-50 hover:bg-red-100/80 text-red-650 hover:text-red-700 border border-red-200"
+            >
+              Sair do Painel
+            </button>
+          )}
         </div>
       </div>
       {/* Sub-tab 1: Overview (Galerias) */}

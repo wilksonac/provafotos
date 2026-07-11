@@ -886,7 +886,18 @@ export default function App() {
       
       {/* Cabeçalho Fixo Translúcido (Sticky Glassmorphic) */}
       <header className="sticky top-0 z-[50] bg-[#FAF9F6]/80 backdrop-blur-md border-b border-stone-200/60 px-4 sm:px-6 py-2.5 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-2 shadow-[0_2px_15px_-3px_rgba(28,25,23,0.02)]">
-        <div className="flex items-center gap-2 justify-center sm:justify-start w-full sm:w-auto">
+        <div 
+          onClick={() => {
+            setActiveTab('client');
+            setSelectedGalleryToken(null);
+            setSelectedWeddingId(null);
+            setSelectedBlogPostId(null);
+            setLightboxIndex(null);
+            setPortfolioCategory('todos');
+            setShowAllPortfolio(false);
+          }}
+          className="flex items-center gap-2 justify-center sm:justify-start w-full sm:w-auto cursor-pointer hover:opacity-80 transition-opacity select-none"
+        >
           <div className="w-6 h-6 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-xs tracking-widest shadow-xs flex-shrink-0">
             W
           </div>

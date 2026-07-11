@@ -33,12 +33,13 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
   if (index >= photos.length) return null;
   const photo = photos[index];
 
-  const isFirstCol = columnIndex === 0;
+  const paddingLeft = columnIndex === 0 ? 0 : gap / 2;
+  const paddingRight = columnIndex === columns - 1 ? 0 : gap / 2;
   
   const adjustedStyle = {
     ...style,
-    left: style.left + (isFirstCol ? 0 : gap / 2),
-    width: columnWidth,
+    paddingLeft,
+    paddingRight,
     paddingBottom: gap,
     boxSizing: 'border-box'
   };
@@ -206,9 +207,7 @@ export default function PhotoVirtualGrid({
   const [activeScene, setActiveScene] = useState('Todas');
   
   // Estado para visualização de Lightbox
-  const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
-
-  const [scrollTop, setScrollTop] = useState(0);
+  const [isShrunk, setIsShrunk] = useState(false);
 
   // Estados para simulação de download
   const [isDownloading, setIsDownloading] = useState(false);
@@ -291,8 +290,9 @@ export default function PhotoVirtualGrid({
   }, []);
 
   const gridLayout = useMemo(() => {
-    const gap = 16; 
-    const minCardWidth = 240; 
+    const isMobile = dimensions.width < 640;
+    const gap = isMobile ? 8 : 16; 
+    const minCardWidth = isMobile ? 145 : 240; 
     const containerWidth = dimensions.width;
     
     const columns = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
@@ -412,11 +412,7 @@ export default function PhotoVirtualGrid({
 
   // Cálculos dinâmicos para colapso do cabeçalho cinematográfico no scroll
   const isMobile = dimensions.width < 640;
-  const scrollFactor = Math.min(180, scrollTop);
-  const maxCoverHeight = isMobile ? 180 : 320; // Começa menor no mobile para dar mais espaço
-  const minCoverHeight = 60;
-  const coverHeight = maxCoverHeight - (scrollFactor / 180) * (maxCoverHeight - minCoverHeight);
-  const shrinkProgress = scrollFactor / 180;
+  const coverHeight = isShrunk ? 60 : (isMobile ? 180 : 320);
 
   // Altura dinâmica do Grid descontando cabeçalho, abas e rodapé minimalista no celular
   const gridHeight = dimensions.height - coverHeight - (isMobile ? 107 : 78);
@@ -424,23 +420,23 @@ export default function PhotoVirtualGrid({
   return (
     <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans">
       
-      {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento com Efeito Colapsável) */}
+      {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento com Efeito Colapsável por Classes CSS) */}
       <div 
-        className="relative w-full overflow-hidden flex items-center justify-center flex-shrink-0 transition-all duration-75 ease-out border-b border-stone-200/40"
+        className="relative w-full overflow-hidden flex items-center justify-center flex-shrink-0 border-b border-stone-200/40 transition-all duration-300 ease-in-out"
         style={{ height: `${coverHeight}px` }}
       >
         <img 
           src={coverImage} 
           alt="Cover" 
-          className="absolute inset-0 w-full h-full object-cover" 
-          style={{ 
-            filter: `brightness(${0.72 - shrinkProgress * 0.2}) blur(${shrinkProgress * 6}px)`,
-            transform: `scale(${1 + shrinkProgress * 0.05})`
-          }} 
+          className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ease-in-out ${
+            isShrunk 
+              ? 'brightness-[0.52] blur-md scale-[1.03]' 
+              : 'brightness-[0.72] blur-0 scale-100'
+          }`}
         />
         <div className="absolute inset-0 bg-stone-950/20" />
         <div className="relative z-10 text-center px-4 text-white flex flex-col items-center justify-center h-full w-full">
-          {shrinkProgress < 0.65 ? (
+          {!isShrunk ? (
             <div className="animate-fade-in space-y-1">
               <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] font-medium opacity-90 mb-1 sm:mb-2">Wilkson Fotografias</p>
               <h1 className="font-serif-editorial text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-[0.15em] mb-1 sm:mb-3 uppercase">
@@ -498,7 +494,13 @@ export default function PhotoVirtualGrid({
             columnCount={gridLayout.columns}
             columnWidth={gridLayout.columnWidth}
             height={gridHeight}
-            onScroll={({ scrollTop }) => setScrollTop(scrollTop)}
+            onScroll={({ scrollTop }) => {
+              if (scrollTop > 60 && !isShrunk) {
+                setIsShrunk(true);
+              } else if (scrollTop <= 60 && isShrunk) {
+                setIsShrunk(false);
+              }
+            }}
             rowCount={gridLayout.rowCount}
             rowHeight={gridLayout.rowHeight}
             width={dimensions.width}

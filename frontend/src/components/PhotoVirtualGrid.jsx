@@ -24,7 +24,8 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
     marcaDaguaAtiva,
     marcaDaguaTexto,
     marcaDaguaOpacidade,
-    marcaDaguaMiniaturas
+    marcaDaguaMiniaturas,
+    marcaDaguaEstilo
   } = data;
   
   const index = rowIndex * columns + columnIndex;
@@ -83,11 +84,39 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
               className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-10"
               style={{ opacity: marcaDaguaOpacidade / 100 }}
             >
-              {/* Linhas Cruzadas (X) */}
-              <svg className="absolute inset-0 w-full h-full text-white/35" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
-                <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
-              </svg>
+              {/* Linhas Cruzadas (SVG de acordo com o estilo selecionado) */}
+              {marcaDaguaEstilo === 'media' ? (
+                <svg className="absolute inset-0 w-full h-full text-white/35" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                  <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                  <line x1="0" y1="30" x2="70" y2="100" stroke="currentColor" strokeWidth="0.35" strokeDasharray="2, 2" />
+                  <line x1="30" y1="0" x2="100" y2="70" stroke="currentColor" strokeWidth="0.35" strokeDasharray="2, 2" />
+                  <line x1="100" y1="30" x2="30" y2="100" stroke="currentColor" strokeWidth="0.35" strokeDasharray="2, 2" />
+                  <line x1="70" y1="0" x2="0" y2="70" stroke="currentColor" strokeWidth="0.35" strokeDasharray="2, 2" />
+                </svg>
+              ) : marcaDaguaEstilo === 'pesada' ? (
+                <svg className="absolute inset-0 w-full h-full text-white/35" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                  <line x1="0" y1="25" x2="75" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="0" y1="50" x2="50" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="0" y1="75" x2="25" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="25" y1="0" x2="100" y2="75" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="50" y1="0" x2="100" y2="50" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="75" y1="0" x2="100" y2="25" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                  <line x1="100" y1="25" x2="25" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="100" y1="50" x2="50" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="100" y1="75" x2="75" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="75" y1="0" x2="0" y2="75" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="50" y1="0" x2="0" y2="50" stroke="currentColor" strokeWidth="0.3" />
+                  <line x1="25" y1="0" x2="0" y2="25" stroke="currentColor" strokeWidth="0.3" />
+                </svg>
+              ) : (
+                <svg className="absolute inset-0 w-full h-full text-white/35" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                  <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                </svg>
+              )}
               
               {/* Texto Central */}
               <div className="relative font-serif-editorial text-[9px] sm:text-[10px] tracking-[0.15em] uppercase text-white font-normal bg-black/25 px-2.5 py-1 border border-white/10 rotate-12 whitespace-nowrap shadow-sm z-20">
@@ -150,6 +179,7 @@ export default function PhotoVirtualGrid({
   marcaDaguaOpacidade = 30,
   marcaDaguaMiniaturas = true,
   marcaDaguaExpandida = true,
+  marcaDaguaEstilo = 'leve',
   tipoGaleria = 'ensaio',
   permitirDownload = true,
   pagamentoExtrasConfirmado = false,
@@ -347,7 +377,8 @@ export default function PhotoVirtualGrid({
     marcaDaguaAtiva,
     marcaDaguaTexto,
     marcaDaguaOpacidade,
-    marcaDaguaMiniaturas
+    marcaDaguaMiniaturas,
+    marcaDaguaEstilo
   }), [
     photos, 
     gridLayout.columns, 
@@ -358,7 +389,8 @@ export default function PhotoVirtualGrid({
     marcaDaguaAtiva, 
     marcaDaguaTexto, 
     marcaDaguaOpacidade, 
-    marcaDaguaMiniaturas
+    marcaDaguaMiniaturas,
+    marcaDaguaEstilo
   ]);
 
   const isLimitReached = !selecaoLivre && limiteFotos && selectedCount >= limiteFotos;
@@ -648,11 +680,39 @@ export default function PhotoVirtualGrid({
                   className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden select-none z-10"
                   style={{ opacity: marcaDaguaOpacidade / 100 }}
                 >
-                  {/* Linhas Cruzadas (X) */}
-                  <svg className="absolute inset-0 w-full h-full text-white/30" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.3" />
-                    <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.3" />
-                  </svg>
+                  {/* Linhas Cruzadas (SVG de acordo com o estilo selecionado) */}
+                  {marcaDaguaEstilo === 'media' ? (
+                    <svg className="absolute inset-0 w-full h-full text-white/30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                      <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                      <line x1="0" y1="30" x2="70" y2="100" stroke="currentColor" strokeWidth="0.3" strokeDasharray="2, 2" />
+                      <line x1="30" y1="0" x2="100" y2="70" stroke="currentColor" strokeWidth="0.3" strokeDasharray="2, 2" />
+                      <line x1="100" y1="30" x2="30" y2="100" stroke="currentColor" strokeWidth="0.3" strokeDasharray="2, 2" />
+                      <line x1="70" y1="0" x2="0" y2="70" stroke="currentColor" strokeWidth="0.3" strokeDasharray="2, 2" />
+                    </svg>
+                  ) : marcaDaguaEstilo === 'pesada' ? (
+                    <svg className="absolute inset-0 w-full h-full text-white/30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                      <line x1="0" y1="25" x2="75" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="0" y1="50" x2="50" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="0" y1="75" x2="25" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="25" y1="0" x2="100" y2="75" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="50" y1="0" x2="100" y2="50" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="75" y1="0" x2="100" y2="25" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.4" />
+                      <line x1="100" y1="25" x2="25" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="100" y1="50" x2="50" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="100" y1="75" x2="75" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="75" y1="0" x2="0" y2="75" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="50" y1="0" x2="0" y2="50" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="25" y1="0" x2="0" y2="25" stroke="currentColor" strokeWidth="0.3" />
+                    </svg>
+                  ) : (
+                    <svg className="absolute inset-0 w-full h-full text-white/30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                      <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="0.3" />
+                    </svg>
+                  )}
                   
                   {/* Texto Central */}
                   <div className="relative font-serif-editorial text-lg md:text-2xl lg:text-3xl tracking-[0.2em] uppercase text-white font-light border border-white/15 px-6 py-3 bg-black/20 shadow-md rotate-12 whitespace-nowrap z-20">

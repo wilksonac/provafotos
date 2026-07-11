@@ -866,6 +866,7 @@ export default function App() {
             marcaDaguaOpacidade={matchedEvent.marca_dagua_opacidade}
             marcaDaguaMiniaturas={matchedEvent.marca_dagua_miniaturas}
             marcaDaguaExpandida={matchedEvent.marca_dagua_expandida}
+            marcaDaguaEstilo={matchedEvent.marca_dagua_estilo || 'leve'}
             tipoGaleria={matchedEvent.tipo_galeria}
             permitirDownload={matchedEvent.permitir_download}
             pagamentoExtrasConfirmado={matchedEvent.pagamento_extras_confirmado}

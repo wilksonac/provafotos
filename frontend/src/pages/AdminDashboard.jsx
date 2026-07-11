@@ -90,6 +90,7 @@ export default function AdminDashboard({
   const [marcaDaguaOpacidade, setMarcaDaguaOpacidade] = useState(30);
   const [marcaDaguaMiniaturas, setMarcaDaguaMiniaturas] = useState(true);
   const [marcaDaguaExpandida, setMarcaDaguaExpandida] = useState(true);
+  const [marcaDaguaEstilo, setMarcaDaguaEstilo] = useState('leve'); // 'leve' | 'media' | 'pesada'
 
   // Categoria de Galeria & Download
   const [tipoGaleria, setTipoGaleria] = useState('ensaio');
@@ -342,6 +343,7 @@ export default function AdminDashboard({
       marca_dagua_opacidade: parseInt(marcaDaguaOpacidade),
       marca_dagua_miniaturas: marcaDaguaMiniaturas,
       marca_dagua_expandida: marcaDaguaExpandida,
+      marca_dagua_estilo: marcaDaguaEstilo,
       tipo_galeria: tipoGaleria,
       permitir_download: permitirDownload,
       pagamento_extras_confirmado: false,
@@ -360,6 +362,7 @@ export default function AdminDashboard({
     setMarcaDaguaOpacidade(30);
     setMarcaDaguaMiniaturas(true);
     setMarcaDaguaExpandida(true);
+    setMarcaDaguaEstilo('leve');
     setTipoGaleria('ensaio');
     setPermitirDownload(true);
     setAcessoRestrito(false);
@@ -1475,6 +1478,34 @@ ${form.nomeFotografo}`;
                         className="w-full accent-stone-900 h-1 bg-stone-200 border border-stone-300 rounded-lg appearance-none cursor-pointer"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Seletor do Estilo da Marca D'água */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">
+                    Cobertura da Marca D'água
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: 'leve', label: '🟢 Leve (Padrão)', desc: 'Linhas em X central + texto' },
+                      { id: 'media', label: '🟡 Média', desc: 'X central + pontilhados adicionais' },
+                      { id: 'pesada', label: '🔴 Pesada', desc: 'Grade em losangos (segurança máxima)' }
+                    ].map((style) => (
+                      <button
+                        type="button"
+                        key={style.id}
+                        onClick={() => setMarcaDaguaEstilo(style.id)}
+                        className={`p-2 border rounded-lg text-left transition-all ${
+                          marcaDaguaEstilo === style.id
+                            ? 'border-stone-900 bg-stone-50 ring-1 ring-stone-900'
+                            : 'border-stone-200 bg-white hover:bg-stone-50/50'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold text-stone-850">{style.label}</div>
+                        <div className="text-[8.5px] text-stone-400 font-medium leading-tight mt-0.5">{style.desc}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 

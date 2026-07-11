@@ -34,7 +34,9 @@ export default function AdminDashboard({
   onDeleteRealWedding,
   onAddBlogPost,
   onDeleteBlogPost,
-  onSetPortfolioBanner
+  onSetPortfolioBanner,
+  contato,
+  onSaveContato
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
@@ -55,6 +57,25 @@ export default function AdminDashboard({
   
   // Form states
   const [clientForm, setClientForm] = useState({ nome: '', email: '', telefone: '', senha: '' });
+  const [contatoForm, setContatoForm] = useState({
+    telefone: contato?.telefone || '',
+    whatsapp: contato?.whatsapp || '',
+    instagram: contato?.instagram || '',
+    email: contato?.email || '',
+    endereco: contato?.endereco || ''
+  });
+
+  React.useEffect(() => {
+    if (contato) {
+      setContatoForm({
+        telefone: contato.telefone || '',
+        whatsapp: contato.whatsapp || '',
+        instagram: contato.instagram || '',
+        email: contato.email || '',
+        endereco: contato.endereco || ''
+      });
+    }
+  }, [contato]);
   const [galleryForm, setGalleryForm] = useState({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
   
   // Configurações avançadas da galeria
@@ -580,6 +601,16 @@ ${form.nomeFotografo}`;
                 }`}
               >
                 Dicas / Blog
+              </button>
+              <button
+                onClick={() => setActiveSubTab('contato')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'contato'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Fale Conosco
               </button>
             </>
           )}
@@ -2062,6 +2093,91 @@ ${form.nomeFotografo}`;
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sub-tab 8: Fale Conosco / Contato */}
+      {activeSubTab === 'contato' && (
+        <div className="animate-scale-in max-w-xl mx-auto space-y-6">
+          <div className="bg-stone-50/45 p-6 rounded-xl border border-stone-200/60 space-y-5">
+            <div className="border-b border-stone-200/50 pb-3">
+              <h3 className="font-serif-editorial text-lg text-stone-900">Informações de Contato / Rodapé</h3>
+              <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed mt-0.5">
+                Alimente as informações do Fale Conosco que aparecem no rodapé do seu site
+              </p>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (onSaveContato) {
+                onSaveContato(contatoForm);
+                alert("Informações de contato salvas com sucesso!");
+              }
+            }} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Telefone de Exibição</label>
+                <input
+                  type="text"
+                  placeholder="Ex: (11) 98888-7777"
+                  value={contatoForm.telefone}
+                  onChange={(e) => setContatoForm({ ...contatoForm, telefone: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">WhatsApp (Apenas números com DDD)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 5511988887777"
+                  value={contatoForm.whatsapp}
+                  onChange={(e) => setContatoForm({ ...contatoForm, whatsapp: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+                <span className="text-[9px] text-stone-400 block mt-0.5">Importante: Comece com 55 (DDI do Brasil), seguido do DDD e do número (sem espaços, traços ou parênteses) para que o botão de link direto funcione!</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Instagram</label>
+                <input
+                  type="text"
+                  placeholder="Ex: @wilksonfotografia"
+                  value={contatoForm.instagram}
+                  onChange={(e) => setContatoForm({ ...contatoForm, instagram: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">E-mail de Contato</label>
+                <input
+                  type="email"
+                  placeholder="Ex: contato@wilksonfotografias.com.br"
+                  value={contatoForm.email}
+                  onChange={(e) => setContatoForm({ ...contatoForm, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Localização / Cidade</label>
+                <input
+                  type="text"
+                  placeholder="Ex: São Paulo - SP"
+                  value={contatoForm.endereco}
+                  onChange={(e) => setContatoForm({ ...contatoForm, endereco: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md mt-4"
+              >
+                Salvar Informações de Contato
+              </button>
+            </form>
+          </div>
         </div>
       )}
 

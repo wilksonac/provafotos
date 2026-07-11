@@ -19,6 +19,7 @@ export default function AdminDashboard({
   blogPosts = [],
   onAddCliente,
   onAddEvento,
+  onUpdateEvento,
   onSelectEventUpload,
   onSelectEventView,
   onConfirmPayment,
@@ -101,6 +102,7 @@ export default function AdminDashboard({
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [photosModalEventId, setPhotosModalEventId] = useState(null);
   const [tempTemplate, setTempTemplate] = useState('');
 
@@ -333,27 +335,49 @@ export default function AdminDashboard({
       }
     }
 
-    const newEvent = {
-      titulo: galleryForm.titulo,
-      id_cliente: targetClientId,
-      data: galleryForm.data,
-      limite_fotos: selectionType === 'limited' ? galleryForm.limite_fotos : null,
-      selecao_livre: selectionType === 'free',
-      permitir_extras: selectionType === 'limited' ? permitirExtras : false,
-      valor_foto_extra: selectionType === 'limited' && permitirExtras && valorFotoExtra ? parseFloat(valorFotoExtra) : null,
-      marca_dagua_ativa: marcaDaguaAtiva,
-      marca_dagua_texto: marcaDaguaTexto,
-      marca_dagua_opacidade: parseInt(marcaDaguaOpacidade),
-      marca_dagua_miniaturas: marcaDaguaMiniaturas,
-      marca_dagua_expandida: marcaDaguaExpandida,
-      marca_dagua_estilo: marcaDaguaEstilo,
-      tipo_galeria: tipoGaleria,
-      permitir_download: permitirDownload,
-      pagamento_extras_confirmado: false,
-      acesso_restrito: acessoRestrito
-    };
-
-    onAddEvento(newEvent, clientObj);
+    if (editingEventId) {
+      const updatedFields = {
+        titulo: galleryForm.titulo,
+        id_cliente: targetClientId,
+        data: galleryForm.data,
+        limite_fotos: selectionType === 'limited' ? galleryForm.limite_fotos : null,
+        selecao_livre: selectionType === 'free',
+        permitir_extras: selectionType === 'limited' ? permitirExtras : false,
+        valor_foto_extra: selectionType === 'limited' && permitirExtras && valorFotoExtra ? parseFloat(valorFotoExtra) : null,
+        marca_dagua_ativa: marcaDaguaAtiva,
+        marca_dagua_texto: marcaDaguaTexto,
+        marca_dagua_opacidade: parseInt(marcaDaguaOpacidade),
+        marca_dagua_miniaturas: marcaDaguaMiniaturas,
+        marca_dagua_expandida: marcaDaguaExpandida,
+        marca_dagua_estilo: marcaDaguaEstilo,
+        tipo_galeria: tipoGaleria,
+        permitir_download: permitirDownload,
+        acesso_restrito: acessoRestrito
+      };
+      onUpdateEvento(editingEventId, updatedFields);
+      setEditingEventId(null);
+    } else {
+      const newEvent = {
+        titulo: galleryForm.titulo,
+        id_cliente: targetClientId,
+        data: galleryForm.data,
+        limite_fotos: selectionType === 'limited' ? galleryForm.limite_fotos : null,
+        selecao_livre: selectionType === 'free',
+        permitir_extras: selectionType === 'limited' ? permitirExtras : false,
+        valor_foto_extra: selectionType === 'limited' && permitirExtras && valorFotoExtra ? parseFloat(valorFotoExtra) : null,
+        marca_dagua_ativa: marcaDaguaAtiva,
+        marca_dagua_texto: marcaDaguaTexto,
+        marca_dagua_opacidade: parseInt(marcaDaguaOpacidade),
+        marca_dagua_miniaturas: marcaDaguaMiniaturas,
+        marca_dagua_expandida: marcaDaguaExpandida,
+        marca_dagua_estilo: marcaDaguaEstilo,
+        tipo_galeria: tipoGaleria,
+        permitir_download: permitirDownload,
+        pagamento_extras_confirmado: false,
+        acesso_restrito: acessoRestrito
+      };
+      onAddEvento(newEvent, clientObj);
+    }
     
     setGalleryForm({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
     setClientMode('existing');
@@ -370,6 +394,36 @@ export default function AdminDashboard({
     setPermitirDownload(true);
     setAcessoRestrito(false);
     setActiveSubTab('overview');
+  };
+
+  const handleStartEditEvento = (evento) => {
+    setGalleryForm({
+      titulo: evento.titulo || '',
+      id_cliente: evento.id_cliente || '',
+      data: evento.data || '',
+      limite_fotos: evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 25
+    });
+
+    setClientMode('existing');
+    setSelectionType(evento.selecao_livre ? 'free' : 'limited');
+    setPermirExtrasState(evento);
+  };
+
+  const setPermirExtrasState = (evento) => {
+    setPermitirExtras(!!evento.permitir_extras);
+    setValorFotoExtra(evento.valor_foto_extra !== undefined && evento.valor_foto_extra !== null ? String(evento.valor_foto_extra) : '');
+    setMarcaDaguaAtiva(evento.marca_dagua_ativa !== undefined ? !!evento.marca_dagua_ativa : true);
+    setMarcaDaguaTexto(evento.marca_dagua_texto || 'WILKSON FOTOGRAFIAS');
+    setMarcaDaguaOpacidade(evento.marca_dagua_opacidade !== undefined ? evento.marca_dagua_opacidade : 30);
+    setMarcaDaguaMiniaturas(evento.marca_dagua_miniaturas !== undefined ? !!evento.marca_dagua_miniaturas : true);
+    setMarcaDaguaExpandida(evento.marca_dagua_expandida !== undefined ? !!evento.marca_dagua_expandida : true);
+    setMarcaDaguaEstilo(evento.marca_dagua_estilo || 'leve');
+    setTipoGaleria(evento.tipo_galeria || 'ensaio');
+    setPermitirDownload(evento.permitir_download !== undefined ? !!evento.permitir_download : false);
+    setAcessoRestrito(!!evento.acesso_restrito);
+
+    setEditingEventId(evento.id);
+    setActiveSubTab('new-gallery');
   };
 
   const copyToClipboard = (token) => {
@@ -943,6 +997,12 @@ Qualquer dúvida estou à disposição!`);
                                     </button>
                                   )}
                                   <button
+                                    onClick={() => handleStartEditEvento(evento)}
+                                    className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
                                     onClick={() => setPhotosModalEventId(evento.id)}
                                     className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
                                   >
@@ -1157,7 +1217,7 @@ Qualquer dúvida estou à disposição!`);
       {activeSubTab === 'new-gallery' && (
         <form onSubmit={handleGallerySubmit} className="max-w-lg mx-auto space-y-4 animate-scale-in py-4">
           <h3 className="font-serif-editorial text-xl font-normal text-stone-900 mb-2 border-b border-stone-100 pb-2">
-            Criar Nova Galeria de Seleção
+            {editingEventId ? 'Editar Configurações da Galeria' : 'Criar Nova Galeria de Seleção'}
           </h3>
 
           {/* Dados Gerais da Galeria */}
@@ -1562,7 +1622,24 @@ Qualquer dúvida estou à disposição!`);
           <div className="pt-2 flex gap-3">
             <button
               type="button"
-              onClick={() => setActiveSubTab('overview')}
+              onClick={() => {
+                setEditingEventId(null);
+                setGalleryForm({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
+                setClientMode('existing');
+                setSelectionType('limited');
+                setPermitirExtras(false);
+                setValorFotoExtra('');
+                setMarcaDaguaAtiva(true);
+                setMarcaDaguaTexto('WILKSON FOTOGRAFIAS');
+                setMarcaDaguaOpacidade(30);
+                setMarcaDaguaMiniaturas(true);
+                setMarcaDaguaExpandida(true);
+                setMarcaDaguaEstilo('leve');
+                setTipoGaleria('ensaio');
+                setPermitirDownload(true);
+                setAcessoRestrito(false);
+                setActiveSubTab('overview');
+              }}
               className="w-1/2 py-2 border border-stone-200 text-stone-500 rounded text-xs font-bold uppercase tracking-widest hover:bg-stone-50"
             >
               Cancelar
@@ -1576,7 +1653,7 @@ Qualquer dúvida estou à disposição!`);
                   : 'bg-stone-900 hover:bg-stone-850'
               }`}
             >
-              Criar Galeria
+              {editingEventId ? 'Salvar Alterações' : 'Criar Galeria'}
             </button>
           </div>
         </form>

@@ -333,6 +333,19 @@ export default function App() {
     }
   };
 
+  const handleUpdateEvento = (eventId, updatedEventData) => {
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), updatedEventData)
+        .then(() => console.log("[FIREBASE] Evento atualizado com sucesso:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar evento no Firebase:", err));
+    } else {
+      setEventos((prev) =>
+        prev.map((evt) => (evt.id === eventId ? { ...evt, ...updatedEventData } : evt))
+      );
+    }
+    console.log("[ADMIN] Galeria de evento atualizada:", eventId, updatedEventData);
+  };
+
   // Vincular upload de fotos ao evento selecionado no painel
   const handleUploadSuccess = (uploadedFileData) => {
     console.log(`[UPLOAD] Vinculando foto enviada (${uploadedFileData.name}) ao evento: ${activeEventId}`);
@@ -1520,6 +1533,7 @@ export default function App() {
               blogPosts={blogPosts}
               onAddCliente={handleAddCliente}
               onAddEvento={handleAddEvento}
+              onUpdateEvento={handleUpdateEvento}
               onSelectEventUpload={triggerEventUpload}
               onSelectEventView={triggerEventView}
               onConfirmPayment={handleConfirmPayment}

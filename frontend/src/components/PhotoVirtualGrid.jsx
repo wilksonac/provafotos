@@ -518,12 +518,14 @@ export default function PhotoVirtualGrid({
       <div className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-[90%] sm:max-w-xl bg-white/85 backdrop-blur-md border-t sm:border border-stone-200/50 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] sm:shadow-xl sm:rounded-xl rounded-t-xl py-2.5 sm:py-4 px-4 sm:px-6 z-20 flex flex-row sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 animate-slide-up sm:animate-scale-in">
         <div className="flex-grow min-w-0">
           {isMobile ? (
-            <div className="flex flex-col justify-center min-w-0">
-              <span className="text-[8px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
-              <span className="text-xs font-bold text-stone-900 whitespace-nowrap">
-                {selectedCount} <span className="text-stone-400 font-medium">/</span> {limiteFotos || '∞'}
-                {permitirExtras && limiteFotos && selectedCount > limiteFotos && (
-                  <span className="text-amber-650 font-extrabold ml-1 text-[10px]">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-stone-400 whitespace-nowrap">
+                {currentStatus === 'ativa' ? 'Favoritas' : 'Escolhidas'}
+              </span>
+              <span className="text-sm font-extrabold text-stone-900 whitespace-nowrap">
+                {selectedCount}<span className="text-stone-300 font-medium px-0.5">/</span>{limiteFotos || '∞'}
+                {currentStatus === 'ativa' && permitirExtras && limiteFotos && selectedCount > limiteFotos && (
+                  <span className="text-amber-600 font-bold ml-1 text-[10px]">
                     (+{selectedCount - limiteFotos})
                   </span>
                 )}
@@ -532,7 +534,7 @@ export default function PhotoVirtualGrid({
           ) : (
             selecaoLivre ? (
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-450">Fotos Escolhidas</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-455">Fotos Escolhidas</span>
                 <span className="text-xs font-bold text-stone-950 uppercase tracking-wider">{selectedCount} selecionadas</span>
               </div>
             ) : (
@@ -569,7 +571,7 @@ export default function PhotoVirtualGrid({
           <button
             onClick={() => selectedCount > 0 && setShowConfirmModal(true)}
             disabled={selectedCount === 0}
-            className={`w-full sm:w-auto flex-shrink-0 px-6 py-2.5 sm:py-2 rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
+            className={`w-auto flex-shrink-0 px-5 py-2 sm:py-2.5 rounded text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
               selectedCount > 0
                 ? 'bg-stone-900 hover:bg-stone-850 text-white hover:scale-[1.01] active:scale-95'
                 : 'bg-stone-100 text-stone-300 cursor-not-allowed border border-stone-200'
@@ -578,26 +580,15 @@ export default function PhotoVirtualGrid({
             Enviar Seleção
           </button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-end">
-            {/* Green Success Badge */}
-            <span className="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest bg-emerald-50 border border-emerald-250 text-emerald-700 shadow-sm flex items-center gap-1.5 animate-scale-in">
-              <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              Seleção Finalizada!
-            </span>
-
-            {/* WhatsApp Notify Button */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Botão de Avisar WhatsApp */}
             <a
               href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Oi! Finalizei a seleção das fotos da galeria "${tituloEvent}". Foram selecionadas ${selectedCount} fotos.`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-750 text-white rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center gap-2 shadow-sm active:scale-95 text-center justify-center"
+              className="px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-750 text-white rounded text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 shadow-sm active:scale-95 text-center justify-center flex-shrink-0"
             >
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.472 14.382c-.022-.08-.124-.22-.362-.34-.24-.12-1.414-.698-1.633-.778-.218-.08-.376-.12-.536.12-.16.24-.618.778-.758.94-.14.16-.28.18-.52.06-.24-.12-.99-.364-1.884-1.16-.694-.618-1.162-1.382-1.298-1.62-.137-.24-.015-.369.106-.488.11-.108.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.536-1.29-1.748-1.57-.218-.05-.418-.07-.588-.07-.48 0-.813.12-.99.31-.383.418-.596.985-.596 1.624 0 1.258.918 2.47 1.045 2.64.127.17 1.8 2.748 4.363 3.855.61.264 1.085.42 1.458.54.615.195 1.176.167 1.62.1.493-.074 1.414-.578 1.614-1.137.2-.56.2-1.04.14-1.14zM12 2C6.48 2 2 6.48 2 12c0 2.17.7 4.19 1.94 5.86L2.5 22l4.3-1.4C8.36 21.41 10.13 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.73 0-3.35-.5-4.72-1.37l-.34-.21-2.52.82.84-2.46-.23-.37C4.15 15.02 3.6 13.56 3.6 12c0-4.63 3.77-8.4 8.4-8.4s8.4 3.77 8.4 8.4-3.77 8.4-8.4 8.4z" />
-              </svg>
-              Avisar WhatsApp
+              💬 WhatsApp
             </a>
 
             {/* Download Button (If permitted) */}

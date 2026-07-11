@@ -502,6 +502,23 @@ export default function App() {
     }
   };
 
+  // Definir foto como banner principal do topo (Hero)
+  const handleSetPortfolioBanner = (photoId) => {
+    console.log("[PORTFOLIO] Definindo foto de banner principal:", photoId);
+    if (db) {
+      portfolio.forEach((photo) => {
+        const isTarget = photo.id === photoId;
+        if (photo.banner !== isTarget) {
+          updateDoc(doc(db, "portfolio", photo.id), { banner: isTarget })
+            .then(() => console.log(`[FIREBASE] Foto do portfólio ${photo.id} banner = ${isTarget}`))
+            .catch(err => console.error("[FIREBASE] Erro ao atualizar banner no Firestore:", err));
+        }
+      });
+    } else {
+      setPortfolio((prev) => prev.map(p => ({ ...p, banner: p.id === photoId })));
+    }
+  };
+
   // Helper de compressão de imagens para Casamentos e Blog
   const compressImageToBlob = (file, maxDimension = 1200, quality = 0.75) => {
     return new Promise((resolve) => {
@@ -771,7 +788,7 @@ export default function App() {
     ? (showAllPortfolio ? portfolio : (portfolio.filter(p => p.destaque === true).length > 0 ? portfolio.filter(p => p.destaque === true) : portfolio.slice(0, 6)))
     : portfolio.filter((p) => p.category === portfolioCategory);
 
-  const coverPortfolioPhoto = portfolio.find((p) => p.destaque === true);
+  const coverPortfolioPhoto = portfolio.find((p) => p.banner === true) || portfolio.find((p) => p.destaque === true);
   const coverPortfolioUrl = coverPortfolioPhoto ? coverPortfolioPhoto.url : 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80';
 
   // Renderização específica para link mágico (?gallery=token)
@@ -1439,6 +1456,7 @@ export default function App() {
               onDeleteRealWedding={handleDeleteRealWedding}
               onAddBlogPost={handleAddBlogPost}
               onDeleteBlogPost={handleDeleteBlogPost}
+              onSetPortfolioBanner={handleSetPortfolioBanner}
             />
           )
         )}

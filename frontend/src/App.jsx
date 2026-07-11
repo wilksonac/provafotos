@@ -89,6 +89,9 @@ export default function App() {
     email: 'contato@wilksonfotografias.com.br',
     endereco: 'São Paulo - SP'
   });
+  const [templateMensagem, setTemplateMensagem] = useState(
+    "Oi, {nome}. Tudo bem?\n\nA galeria {titulo} já está disponível.\nO prazo para a seleção das fotos é dia {prazo}.\n\n{observacoes}Para acessar a galeria use os dados abaixo:\n\nLink de acesso: {link}\nE-mail: {email}\nSenha: {senha}\n\nQualquer dúvida estou à disposição!"
+  );
 
   // Estados de Autenticação do Administrador (Firebase Auth)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -176,6 +179,14 @@ export default function App() {
       console.error("[FIREBASE] Erro ao sincronizar contatos:", error);
     });
 
+    const unsubscribeTemplate = onSnapshot(doc(db, "configuracoes", "template_mensagem"), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().texto) {
+        setTemplateMensagem(docSnap.data().texto);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar template de mensagem:", error);
+    });
+
     return () => {
       unsubscribeClientes();
       unsubscribeEventos();
@@ -183,6 +194,7 @@ export default function App() {
       unsubscribeRealWeddings();
       unsubscribeBlogPosts();
       unsubscribeContato();
+      unsubscribeTemplate();
     };
   }, []);
 
@@ -679,6 +691,16 @@ export default function App() {
       await setDoc(doc(db, "configuracoes", "contato"), contatoData);
     } else {
       setContato(contatoData);
+    }
+  };
+
+  // Callback para salvar o template de mensagem personalizada para clientes
+  const handleSaveTemplateMensagem = async (novoTexto) => {
+    console.log("[FIREBASE] Salvando template de mensagem:", novoTexto);
+    if (db) {
+      await setDoc(doc(db, "configuracoes", "template_mensagem"), { texto: novoTexto });
+    } else {
+      setTemplateMensagem(novoTexto);
     }
   };
 
@@ -1497,6 +1519,8 @@ export default function App() {
               onSetPortfolioBanner={handleSetPortfolioBanner}
               contato={contato}
               onSaveContato={handleSaveContato}
+              templateMensagem={templateMensagem}
+              onSaveTemplateMensagem={handleSaveTemplateMensagem}
             />
           )
         )}

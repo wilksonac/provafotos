@@ -36,7 +36,9 @@ export default function AdminDashboard({
   onDeleteBlogPost,
   onSetPortfolioBanner,
   contato,
-  onSaveContato
+  onSaveContato,
+  templateMensagem,
+  onSaveTemplateMensagem
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
@@ -100,6 +102,7 @@ export default function AdminDashboard({
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
   const [photosModalEventId, setPhotosModalEventId] = useState(null);
+  const [tempTemplate, setTempTemplate] = useState('');
 
   // Estados e Handlers do Portfólio Admin
   const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
@@ -407,36 +410,44 @@ export default function AdminDashboard({
     return `${window.location.origin}/?gallery=${token}`;
   };
 
-  const getCompiledMessage = (event, client, form) => {
+  const getCompiledMessage = (event, client, form, customTemplate = null) => {
     if (!event || !client) return '';
     const link = getShareLink(event.token);
     const dateFormatted = formatEventDate(form.prazo || event.data);
     const senhaText = event.acesso_restrito ? (client.senha || '123456') : '(Acesso direto por link)';
     
-    return `Oi, ${client.nome}. Tudo bem?
+    let template = customTemplate !== null ? customTemplate : (templateMensagem || `Oi, {nome}. Tudo bem?
 
-A galeria ${event.titulo} já está disponível.
-O prazo para a seleção das fotos é dia ${dateFormatted}.
+A galeria {titulo} já está disponível.
+O prazo para a seleção das fotos é dia {prazo}.
 
-${form.observacoes ? `${form.observacoes}\n` : ''}
-Para acessar a galeria use os dados abaixo:
+{observacoes}Para acessar a galeria use os dados abaixo:
 
-Link de acesso: ${link}
-E-mail: ${client.email}
-Senha: ${senhaText}
+Link de acesso: {link}
+E-mail: {email}
+Senha: {senha}
 
+Qualquer dúvida estou à disposição!`);
 
-Em caso de dúvidas, por favor, entre em contato pelo e-mail ${form.emailSuporte}
+    let obsText = form.observacoes ? `${form.observacoes}\n` : '';
 
-Um abraço,
+    template = template
+      .replace(/{nome}/g, client.nome || '')
+      .replace(/{titulo}/g, event.titulo || '')
+      .replace(/{prazo}/g, dateFormatted || '')
+      .replace(/{link}/g, link || '')
+      .replace(/{email}/g, client.email || '')
+      .replace(/{senha}/g, senhaText || '')
+      .replace(/{observacoes}/g, obsText);
 
-${form.nomeFotografo}`;
+    return template;
   };
 
   const handleOpenShareModal = (evento) => {
     const client = clientes.find((c) => c.id === evento.id_cliente);
     setSharingEvent(evento);
     setIsCustomMessageEdited(false);
+    setTempTemplate(templateMensagem || '');
     
     const initialForm = {
       observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
@@ -446,7 +457,7 @@ ${form.nomeFotografo}`;
       customMessage: ''
     };
     
-    initialForm.customMessage = getCompiledMessage(evento, client, initialForm);
+    initialForm.customMessage = getCompiledMessage(evento, client, initialForm, templateMensagem || null);
     setShareForm(initialForm);
     setIsShareModalOpen(true);
   };
@@ -456,7 +467,7 @@ ${form.nomeFotografo}`;
     
     if (!isCustomMessageEdited) {
       const client = clientes.find((c) => c.id === sharingEvent.id_cliente);
-      newForm.customMessage = getCompiledMessage(sharingEvent, client, newForm);
+      newForm.customMessage = getCompiledMessage(sharingEvent, client, newForm, tempTemplate || null);
     }
     
     setShareForm(newForm);
@@ -472,7 +483,7 @@ ${form.nomeFotografo}`;
     setIsCustomMessageEdited(false);
     setShareForm({
       ...shareForm,
-      customMessage: getCompiledMessage(sharingEvent, client, shareForm)
+      customMessage: getCompiledMessage(sharingEvent, client, shareForm, tempTemplate || null)
     });
   };
 
@@ -2296,6 +2307,54 @@ ${form.nomeFotografo}`;
                     onChange={(e) => handleShareFormChange('nomeFotografo', e.target.value)}
                     className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
                   />
+                </div>
+
+                {/* Bloco: Editar Modelo Padrão (Template) */}
+                <div className="border-t border-stone-150 pt-4 mt-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-stone-500">
+                      Editar Modelo Padrão (Template)
+                    </span>
+                  </div>
+                  
+                  <textarea
+                    rows="5"
+                    value={tempTemplate}
+                    onChange={(e) => {
+                      setTempTemplate(e.target.value);
+                      if (!isCustomMessageEdited) {
+                        const client = clientes.find((c) => c.id === sharingEvent.id_cliente);
+                        setShareForm(prev => ({
+                          ...prev,
+                          customMessage: getCompiledMessage(sharingEvent, client, prev, e.target.value)
+                        }));
+                      }
+                    }}
+                    placeholder="Olá {nome}, acesse {link}..."
+                    className="w-full p-2 border border-stone-200 rounded text-[10px] font-mono focus:outline-none focus:border-stone-900 bg-stone-50/10 resize-none leading-relaxed"
+                  />
+                  <div className="text-[8px] text-stone-400 font-medium leading-relaxed bg-stone-50 p-2 rounded border border-stone-150">
+                    <span className="block font-bold uppercase tracking-wider text-[7px] text-stone-500 mb-0.5">Tags disponíveis (Substituídas no envio):</span>
+                    <span className="block">
+                      <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{nome}`}</code>, <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{titulo}`}</code>, <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{prazo}`}</code>, <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{link}`}</code>, <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{email}`}</code>, <code className="text-stone-700 bg-white px-1 py-0.5 rounded border border-stone-150 font-bold">{`{senha}`}</code>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onSaveTemplateMensagem) {
+                        try {
+                          await onSaveTemplateMensagem(tempTemplate);
+                          alert("Modelo de mensagem padrão atualizado e salvo com sucesso!");
+                        } catch (err) {
+                          alert("Erro ao salvar modelo: " + err.message);
+                        }
+                      }
+                    }}
+                    className="w-full py-2 bg-stone-850 hover:bg-stone-900 text-white rounded text-[9.5px] font-bold uppercase tracking-widest transition-all shadow-2xs"
+                  >
+                    Salvar Modelo Padrão
+                  </button>
                 </div>
                 
                 {isCustomMessageEdited && (

@@ -81,6 +81,7 @@ export default function App() {
   // Estados de Exibição de Blog e Histórias
   const [selectedWeddingId, setSelectedWeddingId] = useState(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState(null);
+  const [showAllPortfolio, setShowAllPortfolio] = useState(false);
 
   // Estados de Autenticação do Administrador (Firebase Auth)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -484,26 +485,20 @@ export default function App() {
     }
   };
 
-  // Definir foto como destaque/capa do portfólio na página principal
+  // Alternar destaque da foto do portfólio na página principal (Toggle)
   const handleSetPortfolioCover = (photoId) => {
-    console.log("[PORTFOLIO] Definindo foto como destaque:", photoId);
-    const updatedPortfolio = portfolio.map(p => ({
-      ...p,
-      destaque: p.id === photoId
-    }));
+    console.log("[PORTFOLIO] Alternando destaque da foto:", photoId);
+    const targetPhoto = portfolio.find(p => p.id === photoId);
+    if (!targetPhoto) return;
+
+    const newDestaque = !targetPhoto.destaque;
 
     if (db) {
-      portfolio.forEach((photo) => {
-        const isTarget = photo.id === photoId;
-        // Só atualiza se o estado do destaque for mudar para evitar escritas desnecessárias
-        if (photo.destaque !== isTarget) {
-          updateDoc(doc(db, "portfolio", photo.id), { destaque: isTarget })
-            .then(() => console.log(`[FIREBASE] Foto do portfólio ${photo.id} destaque = ${isTarget}`))
-            .catch(err => console.error("[FIREBASE] Erro ao atualizar destaque no Firestore:", err));
-        }
-      });
+      updateDoc(doc(db, "portfolio", photoId), { destaque: newDestaque })
+        .then(() => console.log(`[FIREBASE] Foto do portfólio ${photoId} destaque = ${newDestaque}`))
+        .catch(err => console.error("[FIREBASE] Erro ao alternar destaque no Firestore:", err));
     } else {
-      setPortfolio(updatedPortfolio);
+      setPortfolio((prev) => prev.map(p => p.id === photoId ? { ...p, destaque: newDestaque } : p));
     }
   };
 
@@ -773,7 +768,7 @@ export default function App() {
 
   // Filtrar fotos do portfólio pela categoria
   const filteredPortfolio = portfolioCategory === 'todos'
-    ? portfolio
+    ? (showAllPortfolio ? portfolio : (portfolio.filter(p => p.destaque === true).length > 0 ? portfolio.filter(p => p.destaque === true) : portfolio.slice(0, 6)))
     : portfolio.filter((p) => p.category === portfolioCategory);
 
   const coverPortfolioPhoto = portfolio.find((p) => p.destaque === true);
@@ -982,6 +977,7 @@ export default function App() {
                     onClick={() => {
                       setPortfolioCategory(cat.id);
                       setLightboxIndex(null);
+                      setShowAllPortfolio(false);
                     }}
                     className={`px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
                       portfolioCategory === cat.id
@@ -1020,6 +1016,18 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Botão Ver Mais Fotos (Apenas na aba Todos e se não estiver mostrando tudo) */}
+            {portfolioCategory === 'todos' && !showAllPortfolio && portfolio.length > filteredPortfolio.length && (
+              <div className="text-center pt-6 pb-2 animate-reveal">
+                <button
+                  onClick={() => setShowAllPortfolio(true)}
+                  className="px-6 py-2.5 border border-stone-900 text-stone-900 font-sans text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded hover:bg-stone-900 hover:text-white transition-all shadow-2xs"
+                >
+                  Ver Mais Fotos
+                </button>
               </div>
             )}
 

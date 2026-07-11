@@ -1642,6 +1642,73 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Footer Fale Conosco Dinâmico (Estilo Revista) */}
+      {activeTab !== 'admin' && activeTab !== 'uploader' && (
+        <footer className="bg-stone-950 text-stone-300 py-12 px-6 border-t border-stone-850">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Coluna 1: Sobre */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-white text-stone-950 rounded flex items-center justify-center font-serif text-xs font-bold tracking-widest">
+                  W
+                </div>
+                <span className="font-sans text-xs font-light tracking-[0.3em] text-white uppercase">WILKSON FOTOGRAFIAS</span>
+              </div>
+              <p className="text-[11px] text-stone-400 leading-relaxed font-light">
+                Especializado em registrar a essência, o amor e os momentos mais felizes de casamentos, ensaios e momentos marcantes.
+              </p>
+            </div>
+
+            {/* Coluna 2: Navegação Rápida */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-white">Navegação</h4>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-400 font-light">
+                <button onClick={() => { setActiveTab('client'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Portfólio</button>
+                <button onClick={() => { setActiveTab('real-weddings'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Histórias</button>
+                <button onClick={() => { setActiveTab('blog'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Blog</button>
+                <button onClick={() => { setShowClientLogin(true); }} className="text-left hover:text-white transition-colors">Área do Cliente</button>
+              </div>
+            </div>
+
+            {/* Coluna 3: Fale Conosco */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-white">Fale Conosco</h4>
+              <ul className="space-y-2.5 text-[11px] text-stone-400 font-light">
+                {contato.telefone && <li>📞 {contato.telefone}</li>}
+                {contato.email && <li>✉️ <a href={`mailto:${contato.email}`} className="hover:text-white transition-colors">{contato.email}</a></li>}
+                {contato.endereco && <li>📍 {contato.endereco}</li>}
+                <li className="flex gap-2 pt-2.5">
+                  {contato.whatsapp && (
+                    <a 
+                      href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-900 transition-colors inline-flex items-center gap-1"
+                    >
+                      💬 WhatsApp
+                    </a>
+                  )}
+                  {contato.instagram && (
+                    <a 
+                      href={`https://instagram.com/${contato.instagram.replace('@', '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-stone-900 text-stone-200 border border-stone-850 rounded text-[9px] font-bold uppercase tracking-wider hover:bg-stone-800 transition-colors inline-flex items-center gap-1"
+                    >
+                      📷 Instagram
+                    </a>
+                  )}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="max-w-6xl mx-auto border-t border-stone-900 mt-8 pt-6 text-center text-[9px] text-stone-500 uppercase tracking-widest">
+            &copy; {new Date().getFullYear()} Wilkson Fotografias. Todos os direitos reservados.
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
@@ -1743,72 +1810,10 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
         </div>
       </div>
 
-      {/* Footer Fale Conosco Dinâmico (Estilo Revista) */}
-      {activeTab !== 'admin' && activeTab !== 'uploader' && (
-        <footer className="bg-stone-950 text-stone-300 py-12 px-6 border-t border-stone-850">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Coluna 1: Sobre */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-white text-stone-950 rounded flex items-center justify-center font-serif text-xs font-bold tracking-widest">
-                  W
-                </div>
-                <span className="font-sans text-xs font-light tracking-[0.3em] text-white uppercase">WILKSON FOTOGRAFIAS</span>
-              </div>
-              <p className="text-[11px] text-stone-400 leading-relaxed font-light">
-                Especializado em registrar a essência, o amor e os momentos mais felizes de casamentos, ensaios e momentos marcantes.
-              </p>
-            </div>
-
-            {/* Coluna 2: Navegação Rápida */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-white">Navegação</h4>
-              <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-400 font-light">
-                <button onClick={() => { setActiveTab('client'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Portfólio</button>
-                <button onClick={() => { setActiveTab('real-weddings'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Histórias</button>
-                <button onClick={() => { setActiveTab('blog'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Blog</button>
-                <button onClick={() => { setShowClientLogin(true); }} className="text-left hover:text-white transition-colors">Área do Cliente</button>
-              </div>
-            </div>
-
-            {/* Coluna 3: Fale Conosco */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-white">Fale Conosco</h4>
-              <ul className="space-y-2.5 text-[11px] text-stone-400 font-light">
-                {contato.telefone && <li>📞 {contato.telefone}</li>}
-                {contato.email && <li>✉️ <a href={`mailto:${contato.email}`} className="hover:text-white transition-colors">{contato.email}</a></li>}
-                {contato.endereco && <li>📍 {contato.endereco}</li>}
-                <li className="flex gap-2 pt-2.5">
-                  {contato.whatsapp && (
-                    <a 
-                      href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-900 transition-colors inline-flex items-center gap-1"
-                    >
-                      💬 WhatsApp
-                    </a>
-                  )}
-                  {contato.instagram && (
-                    <a 
-                      href={`https://instagram.com/${contato.instagram.replace('@', '')}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-stone-900 text-stone-200 border border-stone-850 rounded text-[9px] font-bold uppercase tracking-wider hover:bg-stone-800 transition-colors inline-flex items-center gap-1"
-                    >
-                      📷 Instagram
-                    </a>
-                  )}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="max-w-6xl mx-auto border-t border-stone-900 mt-8 pt-6 text-center text-[9px] text-stone-500 uppercase tracking-widest">
-            &copy; {new Date().getFullYear()} Wilkson Fotografias. Todos os direitos reservados.
-          </div>
-        </footer>
-      )}
+      {/* Footer Branding */}
+      <div className="py-4 text-center text-[10px] text-stone-400 font-sans border-t border-stone-200/50">
+        Wilkson Fotografias &copy; {new Date().getFullYear()} &bull; Todos os direitos reservados.
+      </div>
     </div>
   );
 }

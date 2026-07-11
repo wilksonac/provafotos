@@ -2107,11 +2107,16 @@ ${form.nomeFotografo}`;
               </p>
             </div>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (onSaveContato) {
-                onSaveContato(contatoForm);
-                alert("Informações de contato salvas com sucesso!");
+                try {
+                  await onSaveContato(contatoForm);
+                  alert("Informações de contato salvas com sucesso!");
+                } catch (err) {
+                  console.error("[CONTACT SAVE ERROR]", err);
+                  alert("Erro ao salvar informações de contato: " + err.message);
+                }
               }
             }} className="space-y-4">
               <div className="space-y-1">

@@ -1673,6 +1673,7 @@ Qualquer dúvida estou à disposição!`);
             <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold">
               {[
                 { id: 'casamentos', label: 'Casamentos' },
+                { id: 'ensaios', label: 'Ensaios' },
                 { id: 'infantil', label: 'Infantil' },
                 { id: 'formatura', label: 'Formaturas' },
                 { id: 'corporativo', label: 'Corporativo' }

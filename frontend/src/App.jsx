@@ -1077,6 +1077,7 @@ export default function App() {
                 {[
                   { id: 'todos', label: 'Todos' },
                   { id: 'casamentos', label: 'Casamentos' },
+                  { id: 'ensaios', label: 'Ensaios' },
                   { id: 'infantil', label: 'Infantil' },
                   { id: 'formatura', label: 'Formaturas' },
                   { id: 'corporativo', label: 'Corporativo' }

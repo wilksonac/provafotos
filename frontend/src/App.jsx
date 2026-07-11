@@ -3,9 +3,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
-import { db, auth } from './lib/firebase';
+import { db, auth, storage } from './lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // Dados iniciais de fallback
 const defaultClientes = [
@@ -61,6 +62,8 @@ export default function App() {
   const [clientes, setClientes] = useState([]);
   const [eventos, setEventos] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
+  const [realWeddings, setRealWeddings] = useState([]);
+  const [blogPosts, setBlogPosts] = useState([]);
 
   // Navegação e Controle de Rotas
   const [activeTab, setActiveTab] = useState('client'); // 'client' | 'admin' | 'uploader' | 'magic-client'
@@ -74,6 +77,10 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Estados de Exibição de Blog e Histórias
+  const [selectedWeddingId, setSelectedWeddingId] = useState(null);
+  const [selectedBlogPostId, setSelectedBlogPostId] = useState(null);
 
   // Estados de Autenticação do Administrador (Firebase Auth)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -133,10 +140,32 @@ export default function App() {
       console.error("[FIREBASE] Erro ao sincronizar portfólio:", error);
     });
 
+    const unsubscribeRealWeddings = onSnapshot(collection(db, "real_weddings"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setRealWeddings(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar casamentos reais:", error);
+    });
+
+    const unsubscribeBlogPosts = onSnapshot(collection(db, "blog_posts"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setBlogPosts(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar blog posts:", error);
+    });
+
     return () => {
       unsubscribeClientes();
       unsubscribeEventos();
       unsubscribePortfolio();
+      unsubscribeRealWeddings();
+      unsubscribeBlogPosts();
     };
   }, []);
 
@@ -478,6 +507,143 @@ export default function App() {
     }
   };
 
+  // Helper de compressão de imagens para Casamentos e Blog
+  const compressImageToBlob = (file, maxDimension = 1200, quality = 0.75) => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxDimension) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            }
+          } else {
+            if (height > maxDimension) {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            } else {
+              resolve(file);
+            }
+          }, 'image/jpeg', quality);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Callback para adicionar Casamento Real (História)
+  const handleAddRealWedding = async (weddingData, coverFile, photosFiles) => {
+    console.log("[FIREBASE] Iniciando publicação de Casamento Real:", weddingData.titulo);
+    
+    let coverUrl = "";
+    if (coverFile) {
+      const compressedCover = await compressImageToBlob(coverFile, 1200, 0.7);
+      const coverRef = ref(storage, `casamentos_reais/wed_${Date.now()}_capa_${coverFile.name}`);
+      await uploadBytesResumable(coverRef, compressedCover);
+      coverUrl = await getDownloadURL(coverRef);
+    }
+
+    const photosUrls = [];
+    for (let i = 0; i < photosFiles.length; i++) {
+      const file = photosFiles[i];
+      const compressedPhoto = await compressImageToBlob(file, 1200, 0.7);
+      const photoRef = ref(storage, `casamentos_reais/wed_${Date.now()}_photo_${i}_${file.name}`);
+      await uploadBytesResumable(photoRef, compressedPhoto);
+      const url = await getDownloadURL(photoRef);
+      photosUrls.push(url);
+    }
+
+    const newWedding = {
+      id: `wed_${Date.now()}`,
+      titulo: weddingData.titulo,
+      descricao: weddingData.descricao,
+      local: weddingData.local,
+      data: weddingData.data,
+      fornecedores: weddingData.fornecedores,
+      capa: coverUrl,
+      fotos: photosUrls,
+      createdAt: new Date().toISOString()
+    };
+
+    if (db) {
+      await setDoc(doc(db, "real_weddings", newWedding.id), newWedding);
+    } else {
+      setRealWeddings((prev) => [...prev, newWedding]);
+    }
+    console.log("[FIREBASE] Casamento Real publicado com sucesso!");
+  };
+
+  // Callback para excluir Casamento Real
+  const handleDeleteRealWedding = async (weddingId) => {
+    console.log("[FIREBASE] Deletando Casamento Real:", weddingId);
+    if (db) {
+      await deleteDoc(doc(db, "real_weddings", weddingId));
+    } else {
+      setRealWeddings((prev) => prev.filter(w => w.id !== weddingId));
+    }
+  };
+
+  // Callback para adicionar Post no Blog/Dicas
+  const handleAddBlogPost = async (postData, coverFile) => {
+    console.log("[FIREBASE] Iniciando publicação de Artigo de Blog:", postData.titulo);
+
+    let coverUrl = "";
+    if (coverFile) {
+      const compressedCover = await compressImageToBlob(coverFile, 1200, 0.7);
+      const coverRef = ref(storage, `blog_posts/post_${Date.now()}_capa_${coverFile.name}`);
+      await uploadBytesResumable(coverRef, compressedCover);
+      coverUrl = await getDownloadURL(coverRef);
+    }
+
+    const newPost = {
+      id: `post_${Date.now()}`,
+      titulo: postData.titulo,
+      conteudo: postData.conteudo,
+      categoria: postData.categoria,
+      capa: coverUrl,
+      createdAt: new Date().toISOString()
+    };
+
+    if (db) {
+      await setDoc(doc(db, "blog_posts", newPost.id), newPost);
+    } else {
+      setBlogPosts((prev) => [...prev, newPost]);
+    }
+    console.log("[FIREBASE] Artigo de blog publicado com sucesso!");
+  };
+
+  // Callback para excluir Post no Blog
+  const handleDeleteBlogPost = async (postId) => {
+    console.log("[FIREBASE] Deletando Artigo de Blog:", postId);
+    if (db) {
+      await deleteDoc(doc(db, "blog_posts", postId));
+    } else {
+      setBlogPosts((prev) => prev.filter(p => p.id !== postId));
+    }
+  };
+
   // Definir foto como capa/destaque da galeria do cliente
   const handleSetEventCover = (eventId, photoId) => {
     const targetEvent = eventos.find(e => e.id === eventId);
@@ -694,14 +860,17 @@ export default function App() {
         </div>
 
         {/* Abas Superiores de Controle */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 flex-wrap sm:flex-nowrap">
             <button
               onClick={() => {
                 setActiveTab('client');
                 setSelectedGalleryToken(null);
+                setLightboxIndex(null);
+                setSelectedWeddingId(null);
+                setSelectedBlogPostId(null);
               }}
-              className={`px-2.5 sm:px-3 py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'client'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -711,19 +880,56 @@ export default function App() {
             </button>
             <button
               onClick={() => {
+                setActiveTab('real-weddings');
+                setSelectedGalleryToken(null);
+                setLightboxIndex(null);
+                setSelectedWeddingId(null);
+                setSelectedBlogPostId(null);
+              }}
+              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+                activeTab === 'real-weddings'
+                  ? 'bg-stone-900 text-white shadow-xs'
+                  : 'text-stone-400 hover:text-stone-700'
+              }`}
+            >
+              Histórias
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('blog');
+                setSelectedGalleryToken(null);
+                setLightboxIndex(null);
+                setSelectedWeddingId(null);
+                setSelectedBlogPostId(null);
+              }}
+              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+                activeTab === 'blog'
+                  ? 'bg-stone-900 text-white shadow-xs'
+                  : 'text-stone-400 hover:text-stone-700'
+              }`}
+            >
+              Blog
+            </button>
+            <button
+              onClick={() => {
                 setShowClientLogin(true);
               }}
-              className={`px-2.5 sm:px-3 py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'magic-client' || showClientLogin
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
-              Área do Cliente
+              Seleção
             </button>
             <button
-              onClick={() => setActiveTab('admin')}
-              className={`px-2.5 sm:px-3 py-1 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              onClick={() => {
+                setActiveTab('admin');
+                setLightboxIndex(null);
+                setSelectedWeddingId(null);
+                setSelectedBlogPostId(null);
+              }}
+              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'admin' || activeTab === 'uploader'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -820,6 +1026,235 @@ export default function App() {
           </div>
         )}
 
+        {/* Aba 1.2: Casamentos Reais (Público) */}
+        {activeTab === 'real-weddings' && (
+          <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
+            {selectedWeddingId ? (
+              // Detalhes do Casamento Real Selecionado
+              (() => {
+                const wed = realWeddings.find(w => w.id === selectedWeddingId);
+                if (!wed) return <p className="text-stone-450">Casamento não encontrado.</p>;
+                return (
+                  <div className="space-y-8 max-w-4xl mx-auto w-full">
+                    {/* Header */}
+                    <div className="text-center space-y-4">
+                      <button
+                        onClick={() => setSelectedWeddingId(null)}
+                        className="px-3.5 py-1.5 border border-stone-200 text-stone-600 hover:text-stone-950 text-[9px] font-bold uppercase tracking-widest rounded bg-white transition-all shadow-2xs"
+                      >
+                        ← Voltar para Histórias
+                      </button>
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400 bg-stone-100 px-2 py-0.5 rounded">{wed.local}</span>
+                        <span className="text-[9px] text-stone-400 font-mono">{wed.data}</span>
+                      </div>
+                      <h2 className="font-serif-editorial text-3xl sm:text-5xl text-stone-900 font-light tracking-wide px-2 leading-tight">
+                        {wed.titulo}
+                      </h2>
+                      <div className="h-px w-12 bg-stone-300 mx-auto"></div>
+                    </div>
+
+                    {/* Imagem de Capa */}
+                    <div className="w-full aspect-[16/9] rounded-xl overflow-hidden shadow-md">
+                      <img src={wed.capa} alt={wed.titulo} className="w-full h-full object-cover" />
+                    </div>
+
+                    {/* Descrição / História do Casal */}
+                    <div className="bg-white border border-stone-200/60 p-6 sm:p-8 rounded-xl shadow-xs">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3 block">A História do Dia</h3>
+                      <p className="text-stone-750 font-serif-editorial italic text-sm sm:text-base leading-relaxed whitespace-pre-line font-light">
+                        "{wed.descricao}"
+                      </p>
+                    </div>
+
+                    {/* Galeria de Fotos em Mosaico */}
+                    <div className="space-y-4">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2 block">Galeria de Fotos</h3>
+                      <div className="columns-2 gap-4 space-y-4">
+                        {wed.fotos?.map((photoUrl, idx) => (
+                          <div
+                            key={idx}
+                            className="break-inside-avoid inline-block w-full bg-white border border-stone-200/50 rounded-xl overflow-hidden shadow-2xs hover:shadow-xs transition-all duration-300"
+                          >
+                            <img src={photoUrl} alt={`Foto ${idx}`} className="w-full h-auto object-cover" loading="lazy" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Ficha Técnica / Fornecedores */}
+                    {wed.fornecedores && wed.fornecedores.length > 0 && (
+                      <div className="bg-stone-50 border border-stone-200 rounded-xl p-6 shadow-2xs">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-4 pb-2 border-b border-stone-200 block">Ficha Técnica / Fornecedores Parceiros</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          {wed.fornecedores.map((forn, idx) => (
+                            <div key={idx} className="space-y-0.5">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400 block">{forn.funcao}</span>
+                              <span className="text-[11px] font-semibold text-stone-850 block">{forn.nome}</span>
+                              {forn.instagram && (
+                                <a
+                                  href={`https://instagram.com/${forn.instagram.replace('@', '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] text-amber-700 hover:text-amber-800 font-medium tracking-wide inline-flex items-center gap-0.5 mt-0.5"
+                                >
+                                  📷 {forn.instagram}
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              // Listagem de Casamentos Reais
+              <div className="space-y-8">
+                <div className="text-center py-6">
+                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400">Amor e Inspiração</span>
+                  <h2 className="font-serif-editorial text-3xl sm:text-5xl text-stone-900 font-light tracking-wide mt-1">Histórias de Casamentos</h2>
+                  <p className="text-xs text-stone-400 mt-2 uppercase tracking-wider font-semibold">Ensaios e Casamentos Reais com Detalhes e Fornecedores</p>
+                </div>
+
+                {realWeddings.length === 0 ? (
+                  <div className="text-center py-20 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
+                    <p className="text-sm">Nenhuma história de casamento cadastrada ainda.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {realWeddings.map((wed) => (
+                      <div
+                        key={wed.id}
+                        onClick={() => setSelectedWeddingId(wed.id)}
+                        className="group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col h-full"
+                      >
+                        <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                          <img
+                            src={wed.capa}
+                            alt={wed.titulo}
+                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="p-6 flex-grow flex flex-col justify-between space-y-4">
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 bg-stone-100 px-2 py-0.5 rounded">{wed.local}</span>
+                              <span className="text-[8px] text-stone-400 font-mono">{wed.data}</span>
+                            </div>
+                            <h3 className="font-serif-editorial text-lg text-stone-900 mt-3 font-light leading-snug group-hover:text-stone-700 transition-colors">
+                              {wed.titulo}
+                            </h3>
+                            <p className="text-stone-450 text-xs line-clamp-2 mt-2 leading-relaxed font-light">{wed.descricao}</p>
+                          </div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-stone-900 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1 pt-2">
+                            Ver História Completa →
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aba 1.3: Blog / Dicas (Público) */}
+        {activeTab === 'blog' && (
+          <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
+            {selectedBlogPostId ? (
+              // Detalhes do Artigo Selecionado
+              (() => {
+                const post = blogPosts.find(p => p.id === selectedBlogPostId);
+                if (!post) return <p className="text-stone-450">Artigo não encontrado.</p>;
+                return (
+                  <div className="space-y-6 max-w-2xl mx-auto w-full">
+                    {/* Header */}
+                    <div className="text-center space-y-3">
+                      <button
+                        onClick={() => setSelectedBlogPostId(null)}
+                        className="px-3.5 py-1.5 border border-stone-200 text-stone-600 hover:text-stone-950 text-[9px] font-bold uppercase tracking-widest rounded bg-white transition-all shadow-2xs"
+                      >
+                        ← Voltar para Artigos
+                      </button>
+                      <div>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-2.5 py-0.5 rounded inline-block">{post.categoria}</span>
+                      </div>
+                      <h2 className="font-serif-editorial text-2xl sm:text-4xl text-stone-900 font-light tracking-wide px-2 leading-tight">
+                        {post.titulo}
+                      </h2>
+                      <p className="text-[9px] text-stone-400 font-mono">
+                        Publicado em {post.createdAt ? new Date(post.createdAt).toLocaleDateString('pt-BR') : 'Sem data'}
+                      </p>
+                    </div>
+
+                    {/* Imagem de Capa */}
+                    <div className="w-full aspect-[16/10] rounded-xl overflow-hidden shadow-sm">
+                      <img src={post.capa} alt={post.titulo} className="w-full h-full object-cover" />
+                    </div>
+
+                    {/* Conteúdo do Artigo */}
+                    <div className="bg-white border border-stone-200/60 p-6 sm:p-8 rounded-xl shadow-xs">
+                      <p className="text-stone-750 font-sans text-xs sm:text-sm leading-relaxed whitespace-pre-line font-light">
+                        {post.conteudo}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              // Listagem de Artigos do Blog
+              <div className="space-y-8">
+                <div className="text-center py-6">
+                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400 font-sans">Guia e Dicas para Noivos</span>
+                  <h2 className="font-serif-editorial text-3xl sm:text-5xl text-stone-900 font-light tracking-wide mt-1">Dicas & Inspirações</h2>
+                  <p className="text-xs text-stone-400 mt-2 uppercase tracking-wider font-semibold">Tudo o que você precisa saber para planejar o ensaio perfeito</p>
+                </div>
+
+                {blogPosts.length === 0 ? (
+                  <div className="text-center py-20 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
+                    <p className="text-sm">Nenhum artigo de dicas cadastrado ainda.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {blogPosts.map((post) => (
+                      <div
+                        key={post.id}
+                        onClick={() => setSelectedBlogPostId(post.id)}
+                        className="group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col h-full"
+                      >
+                        <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                          <img
+                            src={post.capa}
+                            alt={post.titulo}
+                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="p-6 flex-grow flex flex-col justify-between space-y-4">
+                          <div>
+                            <span className="text-[8px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded inline-block">{post.categoria}</span>
+                            <h3 className="font-serif-editorial text-lg text-stone-900 mt-3 font-light leading-snug group-hover:text-stone-700 transition-colors">
+                              {post.titulo}
+                            </h3>
+                            <p className="text-stone-450 text-xs line-clamp-2 mt-2 leading-relaxed font-light">{post.conteudo}</p>
+                          </div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-stone-900 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1 pt-2">
+                            Ler Artigo Completo →
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Aba 2: Admin Dashboard */}
         {activeTab === 'admin' && (
           !isAdminAuthenticated ? (
@@ -884,6 +1319,8 @@ export default function App() {
               clientes={clientes}
               eventos={eventos}
               portfolio={portfolio}
+              realWeddings={realWeddings}
+              blogPosts={blogPosts}
               onAddCliente={handleAddCliente}
               onAddEvento={handleAddEvento}
               onSelectEventUpload={triggerEventUpload}
@@ -897,6 +1334,10 @@ export default function App() {
               onSetEventCover={handleSetEventCover}
               onDeleteEventPhoto={handleDeleteEventPhoto}
               onSetPortfolioCover={handleSetPortfolioCover}
+              onAddRealWedding={handleAddRealWedding}
+              onDeleteRealWedding={handleDeleteRealWedding}
+              onAddBlogPost={handleAddBlogPost}
+              onDeleteBlogPost={handleDeleteBlogPost}
             />
           )
         )}

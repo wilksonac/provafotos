@@ -15,6 +15,8 @@ export default function AdminDashboard({
   clientes = [],
   eventos = [],
   portfolio = [],
+  realWeddings = [],
+  blogPosts = [],
   onAddCliente,
   onAddEvento,
   onSelectEventUpload,
@@ -27,9 +29,14 @@ export default function AdminDashboard({
   onLogout,
   onSetEventCover,
   onDeleteEventPhoto,
-  onSetPortfolioCover
+  onSetPortfolioCover,
+  onAddRealWedding,
+  onDeleteRealWedding,
+  onAddBlogPost,
+  onDeleteBlogPost
 }) {
-  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery'
+  const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
+  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
   
   // Calcular métricas do Firebase (Cotas Gratuitas)
   const totalStorageBytes = eventos.reduce((sum, evt) => {
@@ -73,6 +80,29 @@ export default function AdminDashboard({
 
   // Estados e Handlers do Portfólio Admin
   const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
+
+  // Novos Estados para Casamentos Reais (Histórias)
+  const [isAddingWedding, setIsAddingWedding] = useState(false);
+  const [weddingForm, setWeddingForm] = useState({
+    titulo: '',
+    descricao: '',
+    local: '',
+    data: '',
+    fornecedores: [{ funcao: '', nome: '', instagram: '' }]
+  });
+  const [weddingCoverFile, setWeddingCoverFile] = useState(null);
+  const [weddingPhotosFiles, setWeddingPhotosFiles] = useState([]);
+  const [uploadingWedding, setUploadingWedding] = useState(false);
+
+  // Novos Estados para Blog / Dicas
+  const [isAddingBlogPost, setIsAddingBlogPost] = useState(false);
+  const [blogPostForm, setBlogPostForm] = useState({
+    titulo: '',
+    conteudo: '',
+    categoria: 'Dicas de Planejamento'
+  });
+  const [blogPostCoverFile, setBlogPostCoverFile] = useState(null);
+  const [uploadingBlogPost, setUploadingBlogPost] = useState(false);
 
   const handlePortfolioUpload = (e) => {
     const files = Array.from(e.target.files || []);
@@ -126,6 +156,93 @@ export default function AdminDashboard({
 
     e.target.value = null;
   };
+
+  // Handlers para Casamentos Reais
+  const handleAddFornecedorField = () => {
+    setWeddingForm({
+      ...weddingForm,
+      fornecedores: [...weddingForm.fornecedores, { funcao: '', nome: '', instagram: '' }]
+    });
+  };
+
+  const handleRemoveFornecedorField = (index) => {
+    const updated = weddingForm.fornecedores.filter((_, i) => i !== index);
+    setWeddingForm({ ...weddingForm, fornecedores: updated });
+  };
+
+  const handleFornecedorChange = (index, field, value) => {
+    const updated = weddingForm.fornecedores.map((forn, i) => {
+      if (i === index) {
+        return { ...forn, [field]: value };
+      }
+      return forn;
+    });
+    setWeddingForm({ ...weddingForm, fornecedores: updated });
+  };
+
+  const handleSaveWedding = async (e) => {
+    e.preventDefault();
+    if (!weddingCoverFile) {
+      alert("Por favor, selecione uma foto de capa para a história!");
+      return;
+    }
+    if (weddingPhotosFiles.length === 0) {
+      alert("Por favor, selecione as fotos que compõem o casamento real!");
+      return;
+    }
+
+    setUploadingWedding(true);
+    try {
+      if (onAddRealWedding) {
+        // Filtra fornecedores vazios
+        const cleanFornecedores = weddingForm.fornecedores.filter(
+          f => f.funcao.trim() || f.nome.trim()
+        );
+        
+        await onAddRealWedding({
+          titulo: weddingForm.titulo,
+          descricao: weddingForm.descricao,
+          local: weddingForm.local,
+          data: weddingForm.data,
+          fornecedores: cleanFornecedores
+        }, weddingCoverFile, weddingPhotosFiles);
+      }
+      setIsAddingWedding(false);
+      alert("Casamento Real publicado com sucesso!");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao publicar casamento real: " + err.message);
+    } finally {
+      setUploadingWedding(false);
+    }
+  };
+
+  const handleSaveBlogPost = async (e) => {
+    e.preventDefault();
+    if (!blogPostCoverFile) {
+      alert("Por favor, selecione uma foto de capa para o artigo!");
+      return;
+    }
+
+    setUploadingBlogPost(true);
+    try {
+      if (onAddBlogPost) {
+        await onAddBlogPost({
+          titulo: blogPostForm.titulo,
+          conteudo: blogPostForm.conteudo,
+          categoria: blogPostForm.categoria
+        }, blogPostCoverFile);
+      }
+      setIsAddingBlogPost(false);
+      alert("Artigo publicado com sucesso!");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao publicar artigo: " + err.message);
+    } finally {
+      setUploadingBlogPost(false);
+    }
+  };
+
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'aberta' | 'expirada' | 'concluida'
 
   // Handlers
@@ -337,82 +454,144 @@ ${form.nomeFotografo}`;
   return (
     <div className="w-full max-w-5xl mx-auto p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans animate-scale-in">
       
-      {/* Dashboard Sub Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-stone-150 pb-5 mb-6 gap-4">
+      {/* Dashboard Sub Header com Seletor de Módulos */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between border-b border-stone-150 pb-5 mb-6 gap-4">
         <div>
           <h2 className="font-serif-editorial text-2xl font-light tracking-wide text-stone-900">
-            Painel de Controle do Fotógrafo
+            {activeModule === 'prova' ? '📷 Módulo Prova de Fotos' : '✍️ Conteúdo do Site & Blog'}
           </h2>
           <p className="text-xs text-stone-400 mt-1 uppercase tracking-wider font-semibold">
-            Gerencie seus clientes, crie novas galerias de fotos e envie links mágicos
+            {activeModule === 'prova' 
+              ? 'Gerencie seus clientes, crie novas galerias de fotos e acompanhe as seleções'
+              : 'Gerencie o portfólio, publique casamentos reais e escreva artigos de dicas'}
           </p>
         </div>
 
-        {/* Sub-tab Switchers */}
-        <div className="flex flex-wrap gap-2">
+        {/* Seletor de Módulos (Tabs) */}
+        <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 flex-wrap sm:flex-nowrap gap-0.5">
           <button
-            onClick={() => setActiveSubTab('overview')}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-              activeSubTab === 'overview'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+            onClick={() => {
+              setActiveModule('prova');
+              setActiveSubTab('overview');
+            }}
+            className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
+              activeModule === 'prova'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-400 hover:text-stone-700'
             }`}
           >
-            Galerias
-          </button>
-          <button
-            onClick={() => setActiveSubTab('clients')}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-              activeSubTab === 'clients'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            Clientes
+            Prova de Fotos
           </button>
           <button
             onClick={() => {
-              setClientForm({ nome: '', email: '', telefone: '', senha: '' });
-              setEditingClientId(null);
-              setActiveSubTab('new-client');
+              setActiveModule('site');
+              setActiveSubTab('portfolio');
             }}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-              activeSubTab === 'new-client'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+            className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
+              activeModule === 'site'
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'text-stone-400 hover:text-stone-700'
             }`}
           >
-            + Novo Cliente
+            Conteúdo do Site
           </button>
-          <button
-            onClick={() => setActiveSubTab('new-gallery')}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-              activeSubTab === 'new-gallery'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            + Nova Galeria
-          </button>
-          <button
-            onClick={() => setActiveSubTab('portfolio')}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
-              activeSubTab === 'portfolio'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            Portfólio
-          </button>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded bg-red-50 hover:bg-red-100/80 text-red-650 hover:text-red-700 border border-red-200"
-            >
-              Sair do Painel
-            </button>
+        </div>
+      </div>
+
+      {/* Sub-tab Switchers baseados no Módulo Ativo */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-150 pb-4 mb-6">
+        <div className="flex flex-wrap gap-1.5">
+          {activeModule === 'prova' ? (
+            <>
+              <button
+                onClick={() => setActiveSubTab('overview')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'overview'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Galerias
+              </button>
+              <button
+                onClick={() => setActiveSubTab('clients')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'clients'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Clientes
+              </button>
+              <button
+                onClick={() => {
+                  setClientForm({ nome: '', email: '', telefone: '', senha: '' });
+                  setEditingClientId(null);
+                  setActiveSubTab('new-client');
+                }}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'new-client'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                + Novo Cliente
+              </button>
+              <button
+                onClick={() => setActiveSubTab('new-gallery')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'new-gallery'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                + Nova Galeria
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setActiveSubTab('portfolio')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'portfolio'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Portfólio Geral
+              </button>
+              <button
+                onClick={() => setActiveSubTab('real-weddings')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'real-weddings'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Casamentos Reais (Histórias)
+              </button>
+              <button
+                onClick={() => setActiveSubTab('blog')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'blog'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Dicas / Blog
+              </button>
+            </>
           )}
         </div>
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded bg-red-50 hover:bg-red-100/80 text-red-650 hover:text-red-700 border border-red-200 self-start sm:self-auto"
+          >
+            Sair do Painel
+          </button>
+        )}
       </div>
       {/* Sub-tab 1: Overview (Galerias) */}
       {activeSubTab === 'overview' && (
@@ -1459,6 +1638,409 @@ ${form.nomeFotografo}`;
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Sub-tab 6: Casamentos Reais (Histórias) */}
+      {activeSubTab === 'real-weddings' && (
+        <div className="animate-scale-in space-y-6">
+          {isAddingWedding ? (
+            <div className="bg-stone-50/45 p-6 rounded-xl border border-stone-200/60 space-y-5">
+              <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
+                <h3 className="font-serif-editorial text-lg text-stone-900">Novo Casamento Real</h3>
+                <button
+                  onClick={() => setIsAddingWedding(false)}
+                  className="px-3 py-1.5 border border-stone-200 text-stone-600 hover:text-stone-950 text-[9px] font-bold uppercase tracking-widest rounded bg-white transition-all shadow-2xs"
+                >
+                  Voltar para Lista
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveWedding} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Título da História</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Casamento no Campo de Amanda & Roberto"
+                      value={weddingForm.titulo}
+                      onChange={(e) => setWeddingForm({ ...weddingForm, titulo: e.target.value })}
+                      className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Local</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Fazenda Vila Rica, SP"
+                        value={weddingForm.local}
+                        onChange={(e) => setWeddingForm({ ...weddingForm, local: e.target.value })}
+                        className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Data</label>
+                      <input
+                        type="date"
+                        required
+                        value={weddingForm.data}
+                        onChange={(e) => setWeddingForm({ ...weddingForm, data: e.target.value })}
+                        className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">A História do Casal / Detalhes</label>
+                  <textarea
+                    required
+                    rows="4"
+                    placeholder="Conte um pouco sobre como foi o dia, a vibe do casal ou depoimentos..."
+                    value={weddingForm.descricao}
+                    onChange={(e) => setWeddingForm({ ...weddingForm, descricao: e.target.value })}
+                    className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 p-4 border border-stone-200 rounded-lg bg-white">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block">Foto de Capa do Post (1 foto)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      required
+                      onChange={(e) => setWeddingCoverFile(e.target.files[0])}
+                      className="text-xs text-stone-500 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border file:border-stone-200 file:text-[9px] file:font-bold file:uppercase file:tracking-widest file:bg-stone-50 file:text-stone-700 hover:file:bg-stone-100"
+                    />
+                    {weddingCoverFile && (
+                      <p className="text-[9px] text-emerald-600 font-mono uppercase mt-1">Capa Selecionada: {weddingCoverFile.name}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1.5 p-4 border border-stone-200 rounded-lg bg-white">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block">Fotos da Galeria (Múltiplas)</label>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      required
+                      onChange={(e) => setWeddingPhotosFiles(Array.from(e.target.files || []))}
+                      className="text-xs text-stone-500 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border file:border-stone-200 file:text-[9px] file:font-bold file:uppercase file:tracking-widest file:bg-stone-50 file:text-stone-700 hover:file:bg-stone-100"
+                    />
+                    {weddingPhotosFiles.length > 0 && (
+                      <p className="text-[9px] text-emerald-600 font-mono uppercase mt-1">{weddingPhotosFiles.length} fotos selecionadas</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3 p-4 border border-stone-200 rounded-lg bg-white">
+                  <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Ficha Técnica / Fornecedores Parceiros</span>
+                    <button
+                      type="button"
+                      onClick={handleAddFornecedorField}
+                      className="px-2 py-1 border border-stone-200 text-stone-600 hover:text-stone-900 text-[8px] font-bold uppercase tracking-widest rounded hover:bg-stone-50 transition-all"
+                    >
+                      + Adicionar Fornecedor
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {weddingForm.fornecedores.map((forn, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Função (ex: Vestido)"
+                          value={forn.funcao}
+                          onChange={(e) => handleFornecedorChange(index, 'funcao', e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-stone-200 rounded text-[11px] focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Nome / Empresa"
+                          value={forn.nome}
+                          onChange={(e) => handleFornecedorChange(index, 'nome', e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-stone-200 rounded text-[11px] focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Instagram (ex: @atelie)"
+                          value={forn.instagram}
+                          onChange={(e) => handleFornecedorChange(index, 'instagram', e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-stone-200 rounded text-[11px] focus:outline-none"
+                        />
+                        {weddingForm.fornecedores.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFornecedorField(index)}
+                            className="p-1.5 border border-red-200 hover:bg-red-50 text-red-500 rounded transition-all"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={uploadingWedding}
+                    className="px-6 py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md disabled:bg-stone-300 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {uploadingWedding ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                        </svg>
+                        Publicando no Site...
+                      </>
+                    ) : (
+                      'Salvar Casamento Real'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block">
+                  Histórias Publicadas ({realWeddings.length})
+                </span>
+                <button
+                  onClick={() => {
+                    setWeddingForm({
+                      titulo: '',
+                      descricao: '',
+                      local: '',
+                      data: '',
+                      fornecedores: [{ funcao: '', nome: '', instagram: '' }]
+                    });
+                    setWeddingCoverFile(null);
+                    setWeddingPhotosFiles([]);
+                    setIsAddingWedding(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-850 text-white text-[9px] font-bold uppercase tracking-widest rounded transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Adicionar História
+                </button>
+              </div>
+
+              {realWeddings.length === 0 ? (
+                <div className="text-center py-16 border border-stone-200 rounded-xl bg-stone-50/15 text-stone-450 font-serif-editorial">
+                  <p className="text-sm">Nenhum casamento real publicado ainda.</p>
+                  <p className="text-xs text-stone-400 mt-1">Publique histórias inspiradoras com a ficha técnica dos parceiros!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {realWeddings.map((wed) => (
+                    <div key={wed.id} className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-sm transition-all flex flex-col md:flex-row h-auto md:h-40">
+                      <div className="w-full md:w-40 h-32 md:h-full bg-stone-50 flex-shrink-0 overflow-hidden relative">
+                        <img src={wed.capa} alt={wed.titulo} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="p-4 flex-grow flex flex-col justify-between min-w-0">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">{wed.local}</span>
+                            <span className="text-[8px] text-stone-400 font-mono">{wed.data}</span>
+                          </div>
+                          <h4 className="font-serif-editorial text-sm text-stone-900 mt-1.5 font-light truncate" title={wed.titulo}>{wed.titulo}</h4>
+                          <p className="text-[10px] text-stone-400 line-clamp-2 mt-1">{wed.descricao}</p>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-stone-100 pt-2.5 mt-2">
+                          <span className="text-[8px] font-mono uppercase text-stone-400 tracking-wider">
+                            {wed.fotos?.length || 0} Fotos • {wed.fornecedores?.length || 0} Parceiros
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Deseja excluir permanentemente a história "${wed.titulo}"?`)) {
+                                if (onDeleteRealWedding) onDeleteRealWedding(wed.id);
+                              }
+                            }}
+                            className="text-red-550 hover:text-red-700 text-[9px] font-bold uppercase tracking-widest transition-all"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sub-tab 7: Blog / Dicas */}
+      {activeSubTab === 'blog' && (
+        <div className="animate-scale-in space-y-6">
+          {isAddingBlogPost ? (
+            <div className="bg-stone-50/45 p-6 rounded-xl border border-stone-200/60 space-y-5">
+              <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
+                <h3 className="font-serif-editorial text-lg text-stone-900">Novo Artigo de Dicas</h3>
+                <button
+                  onClick={() => setIsAddingBlogPost(false)}
+                  className="px-3 py-1.5 border border-stone-200 text-stone-600 hover:text-stone-950 text-[9px] font-bold uppercase tracking-widest rounded bg-white transition-all shadow-2xs"
+                >
+                  Voltar para Lista
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveBlogPost} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Título do Artigo</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Como escolher o look para o Ensaio Pré-Wedding"
+                      value={blogPostForm.titulo}
+                      onChange={(e) => setBlogPostForm({ ...blogPostForm, titulo: e.target.value })}
+                      className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Categoria</label>
+                    <select
+                      value={blogPostForm.categoria}
+                      onChange={(e) => setBlogPostForm({ ...blogPostForm, categoria: e.target.value })}
+                      className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none bg-white"
+                    >
+                      <option value="Dicas de Planejamento">Dicas de Planejamento</option>
+                      <option value="Ideias de Looks">Ideias de Looks</option>
+                      <option value="Escolha do Local">Escolha do Local</option>
+                      <option value="Geral">Geral</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 p-4 border border-stone-200 rounded-lg bg-white max-w-md">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block">Foto de Capa do Artigo (1 foto)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    required
+                    onChange={(e) => setBlogPostCoverFile(e.target.files[0])}
+                    className="text-xs text-stone-500 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border file:border-stone-200 file:text-[9px] file:font-bold file:uppercase file:tracking-widest file:bg-stone-50 file:text-stone-700 hover:file:bg-stone-100"
+                  />
+                  {blogPostCoverFile && (
+                    <p className="text-[9px] text-emerald-600 font-mono uppercase mt-1">Capa Selecionada: {blogPostCoverFile.name}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Conteúdo do Artigo</label>
+                  <textarea
+                    required
+                    rows="8"
+                    placeholder="Escreva aqui as dicas detalhadas para os noivos..."
+                    value={blogPostForm.conteudo}
+                    onChange={(e) => setBlogPostForm({ ...blogPostForm, conteudo: e.target.value })}
+                    className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={uploadingBlogPost}
+                    className="px-6 py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md disabled:bg-stone-300 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {uploadingBlogPost ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                        </svg>
+                        Publicando Artigo...
+                      </>
+                    ) : (
+                      'Publicar Artigo'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block">
+                  Artigos Publicados ({blogPosts.length})
+                </span>
+                <button
+                  onClick={() => {
+                    setBlogPostForm({
+                      titulo: '',
+                      conteudo: '',
+                      categoria: 'Dicas de Planejamento'
+                    });
+                    setBlogPostCoverFile(null);
+                    setIsAddingBlogPost(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-850 text-white text-[9px] font-bold uppercase tracking-widest rounded transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Escrever Artigo
+                </button>
+              </div>
+
+              {blogPosts.length === 0 ? (
+                <div className="text-center py-16 border border-stone-200 rounded-xl bg-stone-50/15 text-stone-450 font-serif-editorial">
+                  <p className="text-sm">Nenhum artigo publicado no blog ainda.</p>
+                  <p className="text-xs text-stone-400 mt-1">Compartilhe dicas interessantes e melhore seu posicionamento orgânico!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {blogPosts.map((post) => (
+                    <div key={post.id} className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-sm transition-all flex flex-col md:flex-row h-auto md:h-36">
+                      <div className="w-full md:w-36 h-28 md:h-full bg-stone-50 flex-shrink-0 overflow-hidden relative">
+                        <img src={post.capa} alt={post.titulo} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="p-4 flex-grow flex flex-col justify-between min-w-0">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded">{post.categoria}</span>
+                          </div>
+                          <h4 className="font-serif-editorial text-sm text-stone-900 mt-2 font-light truncate" title={post.titulo}>{post.titulo}</h4>
+                          <p className="text-[10px] text-stone-400 line-clamp-2 mt-1">{post.conteudo}</p>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-stone-100 pt-2.5 mt-2">
+                          <span className="text-[8px] font-mono uppercase text-stone-400">
+                            {post.createdAt ? new Date(post.createdAt).toLocaleDateString('pt-BR') : 'Sem data'}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Deseja excluir permanentemente o artigo "${post.titulo}"?`)) {
+                                if (onDeleteBlogPost) onDeleteBlogPost(post.id);
+                              }
+                            }}
+                            className="text-red-550 hover:text-red-700 text-[9px] font-bold uppercase tracking-widest transition-all"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -432,13 +432,13 @@ export default function PhotoVirtualGrid({
       </div>
 
       {/* 2. Scene Navigation Bar */}
-      <div className="w-full bg-white border-b border-stone-200/80 px-8 py-4 flex flex-wrap justify-between items-center gap-4">
-        <div className="flex gap-6 overflow-x-auto scrollbar-none py-1">
+      <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
           {['Todas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
             <button
               key={scene}
               onClick={() => setActiveScene(scene)}
-              className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 ${
+              className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 whitespace-nowrap ${
                 activeScene === scene
                   ? 'border-stone-900 text-stone-950'
                   : 'border-transparent text-stone-400 hover:text-stone-700'
@@ -449,7 +449,7 @@ export default function PhotoVirtualGrid({
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
           <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
             currentStatus === 'ativa'
               ? 'bg-stone-50 border-stone-200 text-stone-600'
@@ -461,12 +461,12 @@ export default function PhotoVirtualGrid({
       </div>
 
       {/* 3. Grid de Fotos Principal */}
-      <div ref={containerRef} className="flex-grow px-8 py-6 overflow-hidden bg-[#FAF9F6]">
+      <div ref={containerRef} className="flex-grow px-2 sm:px-8 py-3 sm:py-6 overflow-hidden bg-[#FAF9F6]">
         {gridLayout.columns > 0 && photos.length > 0 ? (
           <Grid
             columnCount={gridLayout.columns}
             columnWidth={gridLayout.columnWidth}
-            height={dimensions.height}
+            height={dimensions.width < 640 ? dimensions.height - 85 : dimensions.height}
             rowCount={gridLayout.rowCount}
             rowHeight={gridLayout.rowHeight}
             width={dimensions.width}
@@ -483,7 +483,7 @@ export default function PhotoVirtualGrid({
       </div>
 
       {/* 4. Barra de Ação Flutuante Editorial */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-xl bg-white border border-stone-200 shadow-xl rounded-xl py-4 px-6 z-20 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 animate-scale-in">
+      <div className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-[90%] sm:max-w-xl bg-white border-t sm:border border-stone-200/90 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] sm:shadow-xl sm:rounded-xl rounded-t-2xl py-3.5 sm:py-4 px-5 sm:px-6 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 animate-slide-up sm:animate-scale-in">
         <div className="w-full md:flex-grow">
           {selecaoLivre ? (
             <div className="flex items-center justify-between">
@@ -523,7 +523,7 @@ export default function PhotoVirtualGrid({
           <button
             onClick={() => selectedCount > 0 && setShowConfirmModal(true)}
             disabled={selectedCount === 0}
-            className={`w-full md:w-auto flex-shrink-0 px-6 py-2 rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
+            className={`w-full sm:w-auto flex-shrink-0 px-6 py-2.5 sm:py-2 rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
               selectedCount > 0
                 ? 'bg-stone-900 hover:bg-stone-850 text-white hover:scale-[1.01] active:scale-95'
                 : 'bg-stone-100 text-stone-300 cursor-not-allowed border border-stone-200'
@@ -532,7 +532,7 @@ export default function PhotoVirtualGrid({
             Enviar Seleção
           </button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-center md:justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-end">
             {/* Green Success Badge */}
             <span className="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest bg-emerald-50 border border-emerald-250 text-emerald-700 shadow-sm flex items-center gap-1.5 animate-scale-in">
               <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -546,7 +546,7 @@ export default function PhotoVirtualGrid({
               href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Oi! Finalizei a seleção das fotos da galeria "${tituloEvent}". Foram selecionadas ${selectedCount} fotos.`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-750 text-white rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center gap-2 shadow-sm active:scale-95 text-center"
+              className="px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-750 text-white rounded text-xs font-bold uppercase tracking-widest transition-all duration-300 flex items-center gap-2 shadow-sm active:scale-95 text-center justify-center"
             >
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.022-.08-.124-.22-.362-.34-.24-.12-1.414-.698-1.633-.778-.218-.08-.376-.12-.536.12-.16.24-.618.778-.758.94-.14.16-.28.18-.52.06-.24-.12-.99-.364-1.884-1.16-.694-.618-1.162-1.382-1.298-1.62-.137-.24-.015-.369.106-.488.11-.108.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.536-1.29-1.748-1.57-.218-.05-.418-.07-.588-.07-.48 0-.813.12-.99.31-.383.418-.596.985-.596 1.624 0 1.258.918 2.47 1.045 2.64.127.17 1.8 2.748 4.363 3.855.61.264 1.085.42 1.458.54.615.195 1.176.167 1.62.1.493-.074 1.414-.578 1.614-1.137.2-.56.2-1.04.14-1.14zM12 2C6.48 2 2 6.48 2 12c0 2.17.7 4.19 1.94 5.86L2.5 22l4.3-1.4C8.36 21.41 10.13 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.73 0-3.35-.5-4.72-1.37l-.34-.21-2.52.82.84-2.46-.23-.37C4.15 15.02 3.6 13.56 3.6 12c0-4.63 3.77-8.4 8.4-8.4s8.4 3.77 8.4 8.4-3.77 8.4-8.4 8.4z" />

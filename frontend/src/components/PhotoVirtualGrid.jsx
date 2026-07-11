@@ -195,7 +195,25 @@ export default function PhotoVirtualGrid({
     if (isDemo && initialPhotos.length === 0) {
       return generateMockPhotos(10000, eventId);
     }
-    return initialPhotos;
+    // Normalização retroativa para suportar formato antigo (array de strings) e formato novo (objetos)
+    return (initialPhotos || []).map((p, idx) => {
+      if (typeof p === 'string') {
+        return {
+          id: p,
+          url_storage: p,
+          name: `Foto ${idx + 1}`,
+          selecionada: false,
+          destaque: false
+        };
+      }
+      return {
+        id: p.id || p.url_storage || `photo_${idx}`,
+        url_storage: p.url_storage || p.url || '',
+        name: p.name || `Foto ${idx + 1}`,
+        selecionada: !!p.selecionada,
+        destaque: !!p.destaque
+      };
+    });
   });
 
   const selectedCount = useMemo(() => {

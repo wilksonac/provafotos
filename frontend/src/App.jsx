@@ -134,7 +134,26 @@ export default function App() {
     const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
       const docs = [];
       snapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        const normalizedPhotos = (data.fotos || []).map((p, idx) => {
+          if (typeof p === 'string') {
+            return {
+              id: p,
+              url_storage: p,
+              name: `Foto ${idx + 1}`,
+              selecionada: false,
+              destaque: false
+            };
+          }
+          return {
+            id: p.id || p.url_storage || `photo_${idx}`,
+            url_storage: p.url_storage || p.url || '',
+            name: p.name || `Foto ${idx + 1}`,
+            selecionada: !!p.selecionada,
+            destaque: !!p.destaque
+          };
+        });
+        docs.push({ id: doc.id, ...data, fotos: normalizedPhotos });
       });
       setEventos(docs);
     }, (error) => {

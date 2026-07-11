@@ -312,7 +312,10 @@ export default function PhotoVirtualGrid({
     const isMobile = dimensions.width < 640;
     const gap = isMobile ? 8 : 16; 
     const minCardWidth = isMobile ? 145 : 240; 
-    const containerWidth = dimensions.width;
+    
+    // Desconta a largura da barra de rolagem vertical (6px no mobile / 18px no desktop)
+    // para garantir que as colunas caibam perfeitamente na largura do container
+    const containerWidth = dimensions.width - (isMobile ? 6 : 18);
     
     const columns = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
     const columnWidth = Math.floor((containerWidth - (columns - 1) * gap) / columns);
@@ -433,81 +436,94 @@ export default function PhotoVirtualGrid({
   const isMobile = dimensions.width < 640;
   const coverHeight = isShrunk ? 60 : (isMobile ? 180 : 320);
 
-  // Altura dinâmica do Grid descontando cabeçalho, abas e rodapé minimalista no celular
-  const gridHeight = dimensions.height - coverHeight - (isMobile ? 107 : 78);
+  // Altura do grid virtualizada constante para evitar remontagem/recálculo no scroll
+  const gridHeight = dimensions.height - (isMobile ? 190 : 118);
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans">
+    <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans relative">
       
-      {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento com Efeito Colapsável por Classes CSS) */}
+      {/* Container Fixo do Cabeçalho (Cover + Nav) para transição de opacidade/altura via hardware GPU */}
+      <div className="absolute top-0 left-0 w-full z-30 flex flex-col flex-shrink-0">
+        
+        {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento com Efeito Colapsável por Classes CSS) */}
+        <div 
+          className="relative w-full overflow-hidden flex items-center justify-center flex-shrink-0 border-b border-stone-200/40 transition-all duration-300 ease-in-out"
+          style={{ height: `${coverHeight}px` }}
+        >
+          <img 
+            src={coverImage} 
+            alt="Cover" 
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ease-in-out ${
+              isShrunk 
+                ? 'brightness-[0.52] blur-md scale-[1.03]' 
+                : 'brightness-[0.72] blur-0 scale-100'
+            }`}
+          />
+          <div className="absolute inset-0 bg-stone-950/20" />
+          <div className="relative z-10 text-center px-4 text-white flex flex-col items-center justify-center h-full w-full">
+            {!isShrunk ? (
+              <div className="animate-fade-in space-y-1">
+                <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] font-medium opacity-90 mb-1 sm:mb-2">Wilkson Fotografias</p>
+                <h1 className="font-serif-editorial text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-[0.15em] mb-1 sm:mb-3 uppercase">
+                  {tituloEvent}
+                </h1>
+                <div className="w-8 h-[1px] bg-white/60 mx-auto my-2" />
+                <p className="text-[9px] sm:text-xs uppercase tracking-[0.2em] font-light opacity-80">
+                  {formattedDate} &bull; {formattedCategory}
+                </p>
+              </div>
+            ) : (
+              <div className="animate-fade-in flex items-center justify-center gap-3 py-1">
+                <span className="font-sans text-[8.5px] uppercase tracking-[0.2em] font-light opacity-80 border-r border-white/30 pr-3">Wilkson</span>
+                <span className="font-serif-editorial text-xs sm:text-base tracking-[0.2em] font-light uppercase truncate max-w-[70vw]">
+                  {tituloEvent}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Scene Navigation Bar */}
+        <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
+            {['Todas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
+              <button
+                key={scene}
+                onClick={() => setActiveScene(scene)}
+                className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 whitespace-nowrap ${
+                  activeScene === scene
+                    ? 'border-stone-900 text-stone-950'
+                    : 'border-transparent text-stone-400 hover:text-stone-700'
+                }`}
+              >
+                {scene}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
+              currentStatus === 'ativa'
+                ? 'bg-stone-50 border-stone-200 text-stone-600'
+                : 'bg-stone-900 border-stone-900 text-white'
+            }`}>
+              {currentStatus === 'ativa' ? 'Seleção aberta' : 'Seleção finalizada'}
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. Grid de Fotos Principal (Passa por baixo do cabeçalho fixo com padding-top suave) */}
       <div 
-        className="relative w-full overflow-hidden flex items-center justify-center flex-shrink-0 border-b border-stone-200/40 transition-all duration-300 ease-in-out"
-        style={{ height: `${coverHeight}px` }}
+        ref={containerRef} 
+        className="flex-grow px-2 sm:px-8 pb-3 sm:pb-6 overflow-hidden bg-[#FAF9F6] transition-all duration-300 ease-in-out"
+        style={{ 
+          paddingTop: isShrunk 
+            ? (isMobile ? '138px' : '118px') 
+            : (isMobile ? '258px' : '378px') 
+        }}
       >
-        <img 
-          src={coverImage} 
-          alt="Cover" 
-          className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ease-in-out ${
-            isShrunk 
-              ? 'brightness-[0.52] blur-md scale-[1.03]' 
-              : 'brightness-[0.72] blur-0 scale-100'
-          }`}
-        />
-        <div className="absolute inset-0 bg-stone-950/20" />
-        <div className="relative z-10 text-center px-4 text-white flex flex-col items-center justify-center h-full w-full">
-          {!isShrunk ? (
-            <div className="animate-fade-in space-y-1">
-              <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] font-medium opacity-90 mb-1 sm:mb-2">Wilkson Fotografias</p>
-              <h1 className="font-serif-editorial text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-[0.15em] mb-1 sm:mb-3 uppercase">
-                {tituloEvent}
-              </h1>
-              <div className="w-8 h-[1px] bg-white/60 mx-auto my-2" />
-              <p className="text-[9px] sm:text-xs uppercase tracking-[0.2em] font-light opacity-80">
-                {formattedDate} &bull; {formattedCategory}
-              </p>
-            </div>
-          ) : (
-            <div className="animate-fade-in flex items-center justify-center gap-3 py-1">
-              <span className="font-sans text-[8.5px] uppercase tracking-[0.2em] font-light opacity-80 border-r border-white/30 pr-3">Wilkson</span>
-              <span className="font-serif-editorial text-xs sm:text-base tracking-[0.2em] font-light uppercase truncate max-w-[70vw]">
-                {tituloEvent}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Scene Navigation Bar */}
-      <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-        <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
-          {['Todas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
-            <button
-              key={scene}
-              onClick={() => setActiveScene(scene)}
-              className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 whitespace-nowrap ${
-                activeScene === scene
-                  ? 'border-stone-900 text-stone-950'
-                  : 'border-transparent text-stone-400 hover:text-stone-700'
-              }`}
-            >
-              {scene}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-          <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
-            currentStatus === 'ativa'
-              ? 'bg-stone-50 border-stone-200 text-stone-600'
-              : 'bg-stone-900 border-stone-900 text-white'
-          }`}>
-            {currentStatus === 'ativa' ? 'Seleção aberta' : 'Seleção finalizada'}
-          </span>
-        </div>
-      </div>
-
-      {/* 3. Grid de Fotos Principal */}
-      <div ref={containerRef} className="flex-grow px-2 sm:px-8 py-3 sm:py-6 overflow-hidden bg-[#FAF9F6]">
         {gridLayout.columns > 0 && photos.length > 0 ? (
           <Grid
             columnCount={gridLayout.columns}

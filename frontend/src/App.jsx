@@ -1046,7 +1046,7 @@ export default function App() {
       </header>
 
       {/* Main Content Render */}
-      <main className="flex-grow flex flex-col p-6">
+      <main className="flex-grow flex flex-col p-3 sm:p-6 max-w-full overflow-x-hidden">
         
         {/* Aba 1: Área do Cliente - Portfólio de Fotos */}
         {activeTab === 'client' && (

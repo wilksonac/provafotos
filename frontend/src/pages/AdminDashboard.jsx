@@ -542,7 +542,7 @@ Qualquer dúvida estou à disposição!`);
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans animate-scale-in">
+    <div className="w-full max-w-5xl mx-auto p-3 sm:p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans animate-scale-in max-w-full overflow-hidden">
       
       {/* Dashboard Sub Header com Seletor de Módulos */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between border-b border-stone-150 pb-5 mb-6 gap-4">

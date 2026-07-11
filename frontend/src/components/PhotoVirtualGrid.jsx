@@ -512,6 +512,8 @@ export default function PhotoVirtualGrid({
             <p className="text-xl">Nenhuma imagem nesta seção.</p>
           </div>
         )}
+      </div>
+
       {/* 4. Barra de Ação Flutuante Editorial (Jateada e Compacta no Mobile) */}
       <div className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-[90%] sm:max-w-xl bg-white/85 backdrop-blur-md border-t sm:border border-stone-200/50 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] sm:shadow-xl sm:rounded-xl rounded-t-xl py-2.5 sm:py-4 px-4 sm:px-6 z-20 flex flex-row sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 animate-slide-up sm:animate-scale-in">
         <div className="flex-grow min-w-0">

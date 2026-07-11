@@ -225,6 +225,7 @@ export default function PhotoVirtualGrid({
   const [activeScene, setActiveScene] = useState('Todas');
   
   // Estado para visualização de Lightbox
+  const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
   const [isShrunk, setIsShrunk] = useState(false);
 
   // Estados para simulação de download

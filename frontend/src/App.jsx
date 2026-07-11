@@ -847,9 +847,9 @@ export default function App() {
     <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans selection:bg-stone-200">
       
       {/* Cabeçalho Fixo Translúcido (Sticky Glassmorphic) */}
-      <header className="sticky top-0 z-[50] bg-[#FAF9F6]/80 backdrop-blur-md border-b border-stone-200/60 px-4 sm:px-6 py-3.5 flex flex-row items-center justify-between gap-2 shadow-[0_2px_15px_-3px_rgba(28,25,23,0.02)]">
-        <div className="flex items-center gap-2">
-          <div className="w-6.5 h-6.5 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-xs tracking-widest shadow-xs flex-shrink-0">
+      <header className="sticky top-0 z-[50] bg-[#FAF9F6]/80 backdrop-blur-md border-b border-stone-200/60 px-4 sm:px-6 py-2.5 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-2 shadow-[0_2px_15px_-3px_rgba(28,25,23,0.02)]">
+        <div className="flex items-center gap-2 justify-center sm:justify-start w-full sm:w-auto">
+          <div className="w-6 h-6 bg-stone-900 rounded flex items-center justify-center font-serif text-white font-light text-xs tracking-widest shadow-xs flex-shrink-0">
             W
           </div>
           <div className="min-w-0">
@@ -860,8 +860,8 @@ export default function App() {
         </div>
 
         {/* Abas Superiores de Controle */}
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center w-full sm:w-auto flex-shrink-0 justify-center">
+          <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 w-full sm:w-auto justify-between sm:justify-start flex-nowrap gap-0.5">
             <button
               onClick={() => {
                 setActiveTab('client');
@@ -870,7 +870,7 @@ export default function App() {
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
               }}
-              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'client'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -886,7 +886,7 @@ export default function App() {
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
               }}
-              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'real-weddings'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -902,7 +902,7 @@ export default function App() {
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
               }}
-              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'blog'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -914,7 +914,7 @@ export default function App() {
               onClick={() => {
                 setShowClientLogin(true);
               }}
-              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'magic-client' || showClientLogin
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'
@@ -929,7 +929,7 @@ export default function App() {
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
               }}
-              className={`px-1.5 sm:px-2.5 py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
                 activeTab === 'admin' || activeTab === 'uploader'
                   ? 'bg-stone-900 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-700'

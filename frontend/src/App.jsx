@@ -1083,7 +1083,7 @@ export default function App() {
                   <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed">Nossos últimos trabalhos contados em histórias e fotos</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="columns-1 md:columns-3 gap-6 space-y-6">
                   {realWeddings.slice(0, 3).map((wed) => (
                     <div
                       key={wed.id}
@@ -1091,13 +1091,13 @@ export default function App() {
                         setSelectedWeddingId(wed.id);
                         setActiveTab('real-weddings');
                       }}
-                      className="group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-sm transition-all duration-300 flex flex-col justify-between"
+                      className="break-inside-avoid inline-block w-full group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-sm transition-all duration-300 flex flex-col mb-4"
                     >
-                      <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                      <div className="w-full bg-stone-50 overflow-hidden relative">
                         <img
                           src={wed.capa}
                           alt={wed.titulo}
-                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                          className="w-full h-auto object-cover group-hover:scale-[1.02] transition-all duration-500"
                           loading="lazy"
                         />
                       </div>
@@ -1131,7 +1131,7 @@ export default function App() {
                   <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed">Guia completo para ajudar no planejamento do seu grande dia</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="columns-1 md:columns-3 gap-6 space-y-6">
                   {blogPosts.slice(0, 3).map((post) => (
                     <div
                       key={post.id}
@@ -1139,13 +1139,13 @@ export default function App() {
                         setSelectedBlogPostId(post.id);
                         setActiveTab('blog');
                       }}
-                      className="group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                      className="break-inside-avoid inline-block w-full group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-sm transition-all duration-300 flex flex-col justify-between mb-4"
                     >
-                      <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                      <div className="w-full bg-stone-50 overflow-hidden relative">
                         <img
                           src={post.capa}
                           alt={post.titulo}
-                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                          className="w-full h-auto object-cover group-hover:scale-[1.02] transition-all duration-500"
                           loading="lazy"
                         />
                       </div>
@@ -1199,8 +1199,8 @@ export default function App() {
                     </div>
 
                     {/* Imagem de Capa */}
-                    <div className="w-full aspect-[16/9] rounded-xl overflow-hidden shadow-md">
-                      <img src={wed.capa} alt={wed.titulo} className="w-full h-full object-cover" />
+                    <div className="w-full rounded-xl overflow-hidden shadow-md">
+                      <img src={wed.capa} alt={wed.titulo} className="w-full h-auto object-cover" />
                     </div>
 
                     {/* Descrição / História do Casal */}
@@ -1267,18 +1267,18 @@ export default function App() {
                     <p className="text-sm">Nenhuma história de casamento cadastrada ainda.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="columns-1 sm:columns-2 gap-6 space-y-6">
                     {realWeddings.map((wed) => (
                       <div
                         key={wed.id}
                         onClick={() => setSelectedWeddingId(wed.id)}
-                        className="group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col h-full"
+                        className="break-inside-avoid inline-block w-full group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col mb-6"
                       >
-                        <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                        <div className="w-full bg-stone-50 overflow-hidden relative">
                           <img
                             src={wed.capa}
                             alt={wed.titulo}
-                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                            className="w-full h-auto object-cover group-hover:scale-[1.02] transition-all duration-500"
                             loading="lazy"
                           />
                         </div>
@@ -1336,8 +1336,8 @@ export default function App() {
                     </div>
 
                     {/* Imagem de Capa */}
-                    <div className="w-full aspect-[16/10] rounded-xl overflow-hidden shadow-sm">
-                      <img src={post.capa} alt={post.titulo} className="w-full h-full object-cover" />
+                    <div className="w-full rounded-xl overflow-hidden shadow-sm">
+                      <img src={post.capa} alt={post.titulo} className="w-full h-auto object-cover" />
                     </div>
 
                     {/* Conteúdo do Artigo */}
@@ -1363,18 +1363,18 @@ export default function App() {
                     <p className="text-sm">Nenhum artigo de dicas cadastrado ainda.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="columns-1 sm:columns-2 gap-6 space-y-6">
                     {blogPosts.map((post) => (
                       <div
                         key={post.id}
                         onClick={() => setSelectedBlogPostId(post.id)}
-                        className="group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col h-full"
+                        className="break-inside-avoid inline-block w-full group cursor-pointer bg-white border border-stone-200 rounded-xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 flex flex-col mb-6"
                       >
-                        <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                        <div className="w-full bg-stone-50 overflow-hidden relative">
                           <img
                             src={post.capa}
                             alt={post.titulo}
-                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                            className="w-full h-auto object-cover group-hover:scale-[1.02] transition-all duration-500"
                             loading="lazy"
                           />
                         </div>

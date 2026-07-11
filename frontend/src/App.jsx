@@ -1023,6 +1023,54 @@ export default function App() {
               </div>
             )}
 
+            {/* Seção de Casamentos Reais na Página Principal (abaixo do portfólio) */}
+            {realWeddings.length > 0 && (
+              <div className="pt-12 border-t border-stone-200/60 mt-12 space-y-8 animate-reveal">
+                <div className="text-center space-y-1">
+                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400">Histórias de Amor</span>
+                  <h3 className="font-serif-editorial text-2xl sm:text-4xl text-stone-900 font-light tracking-wide mt-1">Casamentos & Ensaios Reais</h3>
+                  <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed">Nossos últimos trabalhos contados em histórias e fotos</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {realWeddings.slice(0, 3).map((wed) => (
+                    <div
+                      key={wed.id}
+                      onClick={() => {
+                        setSelectedWeddingId(wed.id);
+                        setActiveTab('real-weddings');
+                      }}
+                      className="group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-sm transition-all duration-300 flex flex-col justify-between"
+                    >
+                      <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                        <img
+                          src={wed.capa}
+                          alt={wed.titulo}
+                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="p-5 space-y-3 flex-grow flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">{wed.local}</span>
+                            <span className="text-[8px] text-stone-400 font-mono">{wed.data}</span>
+                          </div>
+                          <h4 className="font-serif-editorial text-base text-stone-900 mt-2 font-light leading-snug group-hover:text-stone-700 transition-colors line-clamp-2">
+                            {wed.titulo}
+                          </h4>
+                          <p className="text-stone-450 text-[11px] line-clamp-2 mt-1 leading-relaxed font-light">{wed.descricao}</p>
+                        </div>
+                        <span className="text-[8.5px] font-bold uppercase tracking-widest text-stone-900 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1 pt-3 border-t border-stone-100 mt-2">
+                          Ler História Completa →
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 

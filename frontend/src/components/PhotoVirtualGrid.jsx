@@ -208,6 +208,8 @@ export default function PhotoVirtualGrid({
   // Estado para visualização de Lightbox
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
 
+  const [scrollTop, setScrollTop] = useState(0);
+
   // Estados para simulação de download
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -276,7 +278,7 @@ export default function PhotoVirtualGrid({
       if (containerRef.current) {
         setDimensions({
           width: containerRef.current.clientWidth || 800,
-          height: window.innerHeight - 300 
+          height: window.innerHeight
         });
       }
     };
@@ -408,26 +410,55 @@ export default function PhotoVirtualGrid({
 
   const activeLightboxPhoto = activeLightboxIndex !== null ? photos[activeLightboxIndex] : null;
 
+  // Cálculos dinâmicos para colapso do cabeçalho cinematográfico no scroll
+  const isMobile = dimensions.width < 640;
+  const scrollFactor = Math.min(180, scrollTop);
+  const maxCoverHeight = isMobile ? 180 : 320; // Começa menor no mobile para dar mais espaço
+  const minCoverHeight = 60;
+  const coverHeight = maxCoverHeight - (scrollFactor / 180) * (maxCoverHeight - minCoverHeight);
+  const shrinkProgress = scrollFactor / 180;
+
+  // Altura dinâmica do Grid descontando cabeçalho, abas e rodapé minimalista no celular
+  const gridHeight = dimensions.height - coverHeight - (isMobile ? 107 : 78);
+
   return (
     <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans">
       
-      {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento) */}
-      <div className="relative w-full h-[320px] bg-stone-200 overflow-hidden flex items-center justify-center">
+      {/* 1. Cinematic Gallery Cover (Título Dinâmico do Evento com Efeito Colapsável) */}
+      <div 
+        className="relative w-full overflow-hidden flex items-center justify-center flex-shrink-0 transition-all duration-75 ease-out border-b border-stone-200/40"
+        style={{ height: `${coverHeight}px` }}
+      >
         <img 
           src={coverImage} 
           alt="Cover" 
-          className="absolute inset-0 w-full h-full object-cover brightness-[0.76]" 
+          className="absolute inset-0 w-full h-full object-cover" 
+          style={{ 
+            filter: `brightness(${0.72 - shrinkProgress * 0.2}) blur(${shrinkProgress * 6}px)`,
+            transform: `scale(${1 + shrinkProgress * 0.05})`
+          }} 
         />
         <div className="absolute inset-0 bg-stone-950/20" />
-        <div className="relative z-10 text-center px-4 animate-scale-in text-white">
-          <p className="text-[11px] uppercase tracking-[0.3em] font-medium opacity-90 mb-3">Wilkson Fotografias</p>
-          <h1 className="font-serif-editorial text-4xl md:text-5xl lg:text-6xl font-light tracking-[0.15em] mb-4 uppercase">
-            {tituloEvent}
-          </h1>
-          <div className="w-10 h-[1px] bg-white/60 mx-auto my-4" />
-          <p className="text-xs uppercase tracking-[0.2em] font-light opacity-80">
-            {formattedDate} &bull; {formattedCategory}
-          </p>
+        <div className="relative z-10 text-center px-4 text-white flex flex-col items-center justify-center h-full w-full">
+          {shrinkProgress < 0.65 ? (
+            <div className="animate-fade-in space-y-1">
+              <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] font-medium opacity-90 mb-1 sm:mb-2">Wilkson Fotografias</p>
+              <h1 className="font-serif-editorial text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-[0.15em] mb-1 sm:mb-3 uppercase">
+                {tituloEvent}
+              </h1>
+              <div className="w-8 h-[1px] bg-white/60 mx-auto my-2" />
+              <p className="text-[9px] sm:text-xs uppercase tracking-[0.2em] font-light opacity-80">
+                {formattedDate} &bull; {formattedCategory}
+              </p>
+            </div>
+          ) : (
+            <div className="animate-fade-in flex items-center justify-center gap-3 py-1">
+              <span className="font-sans text-[8.5px] uppercase tracking-[0.2em] font-light opacity-80 border-r border-white/30 pr-3">Wilkson</span>
+              <span className="font-serif-editorial text-xs sm:text-base tracking-[0.2em] font-light uppercase truncate max-w-[70vw]">
+                {tituloEvent}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -466,7 +497,8 @@ export default function PhotoVirtualGrid({
           <Grid
             columnCount={gridLayout.columns}
             columnWidth={gridLayout.columnWidth}
-            height={dimensions.width < 640 ? dimensions.height - 85 : dimensions.height}
+            height={gridHeight}
+            onScroll={({ scrollTop }) => setScrollTop(scrollTop)}
             rowCount={gridLayout.rowCount}
             rowHeight={gridLayout.rowHeight}
             width={dimensions.width}
@@ -480,42 +512,54 @@ export default function PhotoVirtualGrid({
             <p className="text-xl">Nenhuma imagem nesta seção.</p>
           </div>
         )}
-      </div>
-
-      {/* 4. Barra de Ação Flutuante Editorial */}
-      <div className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-[90%] sm:max-w-xl bg-white border-t sm:border border-stone-200/90 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] sm:shadow-xl sm:rounded-xl rounded-t-2xl py-3.5 sm:py-4 px-5 sm:px-6 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 animate-slide-up sm:animate-scale-in">
-        <div className="w-full md:flex-grow">
-          {selecaoLivre ? (
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-450">Fotos Escolhidas</span>
-              <span className="text-xs font-bold text-stone-950 uppercase tracking-wider">{selectedCount} selecionadas</span>
+      {/* 4. Barra de Ação Flutuante Editorial (Jateada e Compacta no Mobile) */}
+      <div className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-[90%] sm:max-w-xl bg-white/85 backdrop-blur-md border-t sm:border border-stone-200/50 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] sm:shadow-xl sm:rounded-xl rounded-t-xl py-2.5 sm:py-4 px-4 sm:px-6 z-20 flex flex-row sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 animate-slide-up sm:animate-scale-in">
+        <div className="flex-grow min-w-0">
+          {isMobile ? (
+            <div className="flex flex-col justify-center min-w-0">
+              <span className="text-[8px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
+              <span className="text-xs font-bold text-stone-900 whitespace-nowrap">
+                {selectedCount} <span className="text-stone-400 font-medium">/</span> {limiteFotos || '∞'}
+                {permitirExtras && limiteFotos && selectedCount > limiteFotos && (
+                  <span className="text-amber-650 font-extrabold ml-1 text-[10px]">
+                    (+{selectedCount - limiteFotos})
+                  </span>
+                )}
+              </span>
             </div>
           ) : (
-            <div>
-              <div className="flex items-center justify-between mb-1.5 gap-4">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
-                <span className="text-xs font-bold text-stone-950 whitespace-nowrap">
-                  {selectedCount} <span className="text-stone-400 font-medium">de</span> {limiteFotos}
-                  {permitirExtras && selectedCount > limiteFotos && (
-                    <span className="text-amber-600 font-extrabold ml-1">
-                      {' '}
-                      (+{selectedCount - limiteFotos} extras
-                      {valorFotoExtra && valorFotoExtra > 0 && ` : R$ ${((selectedCount - limiteFotos) * valorFotoExtra).toFixed(2).replace('.', ',')}`}
-                      )
-                    </span>
-                  )}
-                </span>
+            selecaoLivre ? (
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-450">Fotos Escolhidas</span>
+                <span className="text-xs font-bold text-stone-950 uppercase tracking-wider">{selectedCount} selecionadas</span>
               </div>
-              
-              <div className="w-full bg-stone-100 rounded-full h-1 overflow-hidden border border-stone-200/50">
-                <div
-                  className={`h-full transition-all duration-500 ${
-                    isLimitReached && !permitirExtras ? 'bg-amber-600' : 'bg-stone-900'
-                  }`}
-                  style={{ width: `${Math.min(100, (selectedCount / limiteFotos) * 100)}%` }}
-                ></div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-1.5 gap-4">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
+                  <span className="text-xs font-bold text-stone-950 whitespace-nowrap">
+                    {selectedCount} <span className="text-stone-400 font-medium">de</span> {limiteFotos}
+                    {permitirExtras && selectedCount > limiteFotos && (
+                      <span className="text-amber-600 font-extrabold ml-1">
+                        {' '}
+                        (+{selectedCount - limiteFotos} extras
+                        {valorFotoExtra && valorFotoExtra > 0 && ` : R$ ${((selectedCount - limiteFotos) * valorFotoExtra).toFixed(2).replace('.', ',')}`}
+                        )
+                      </span>
+                    )}
+                  </span>
+                </div>
+                
+                <div className="w-full bg-stone-100 rounded-full h-1 overflow-hidden border border-stone-200/50">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      isLimitReached && !permitirExtras ? 'bg-amber-600' : 'bg-stone-900'
+                    }`}
+                    style={{ width: `${Math.min(100, (selectedCount / (limiteFotos || 1)) * 100)}%` }}
+                  ></div>
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
 

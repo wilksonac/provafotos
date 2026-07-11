@@ -1071,6 +1071,51 @@ export default function App() {
               </div>
             )}
 
+            {/* Seção de Blog/Dicas na Página Principal (Home Feed) */}
+            {blogPosts.length > 0 && (
+              <div className="pt-12 border-t border-stone-200/60 mt-12 space-y-8 animate-reveal">
+                <div className="text-center space-y-1">
+                  <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400">Dicas & Conteúdo</span>
+                  <h3 className="font-serif-editorial text-2xl sm:text-4xl text-stone-900 font-light tracking-wide mt-1">Dicas & Inspirações Recentes</h3>
+                  <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed">Guia completo para ajudar no planejamento do seu grande dia</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {blogPosts.slice(0, 3).map((post) => (
+                    <div
+                      key={post.id}
+                      onClick={() => {
+                        setSelectedBlogPostId(post.id);
+                        setActiveTab('blog');
+                      }}
+                      className="group cursor-pointer bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                    >
+                      <div className="aspect-[16/10] w-full bg-stone-50 overflow-hidden relative">
+                        <img
+                          src={post.capa}
+                          alt={post.titulo}
+                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="p-5 space-y-3 flex-grow flex flex-col justify-between">
+                        <div>
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded inline-block">{post.categoria}</span>
+                          <h4 className="font-serif-editorial text-base text-stone-900 mt-2.5 font-light leading-snug group-hover:text-stone-700 transition-colors line-clamp-2">
+                            {post.titulo}
+                          </h4>
+                          <p className="text-stone-450 text-[11px] line-clamp-2 mt-1 leading-relaxed font-light">{post.conteudo}</p>
+                        </div>
+                        <span className="text-[8.5px] font-bold uppercase tracking-widest text-stone-900 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1 pt-3 border-t border-stone-100 mt-2">
+                          Ler Artigo Completo →
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 

@@ -98,6 +98,7 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Controle de autenticação para galerias restritas (Login + Senha)
   const [authenticatedGalleries, setAuthenticatedGalleries] = useState(() => {
@@ -115,11 +116,29 @@ export default function App() {
     } catch (e) {}
   }, [authenticatedGalleries]);
 
-  // Sincronizar clientes, eventos e portfólio do Firestore em tempo real
+  // Sincronizar clientes, eventos e portfólio do Firestore em tempo real com controle de Loading inicial
   useEffect(() => {
-    if (!db) return;
+    if (!db) {
+      setIsLoading(false);
+      return;
+    }
 
     console.log("[FIREBASE] Ativando ouvintes em tempo real do Firestore...");
+
+    let loadedCollections = {
+      clientes: false,
+      eventos: false,
+      portfolio: false,
+      realWeddings: false,
+      blogPosts: false
+    };
+
+    const checkAllLoaded = (collectionName) => {
+      loadedCollections[collectionName] = true;
+      if (Object.values(loadedCollections).every(val => val === true)) {
+        setIsLoading(false);
+      }
+    };
     
     const unsubscribeClientes = onSnapshot(collection(db, "clientes"), (snapshot) => {
       const docs = [];
@@ -127,8 +146,10 @@ export default function App() {
         docs.push({ id: doc.id, ...doc.data() });
       });
       setClientes(docs);
+      checkAllLoaded('clientes');
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar clientes:", error);
+      checkAllLoaded('clientes'); // garante liberação do loading mesmo em erro
     });
 
     const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
@@ -156,8 +177,10 @@ export default function App() {
         docs.push({ id: doc.id, ...data, fotos: normalizedPhotos });
       });
       setEventos(docs);
+      checkAllLoaded('eventos');
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar eventos:", error);
+      checkAllLoaded('eventos');
     });
 
     const unsubscribePortfolio = onSnapshot(collection(db, "portfolio"), (snapshot) => {
@@ -166,8 +189,10 @@ export default function App() {
         docs.push({ id: doc.id, ...doc.data() });
       });
       setPortfolio(docs);
+      checkAllLoaded('portfolio');
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar portfólio:", error);
+      checkAllLoaded('portfolio');
     });
 
     const unsubscribeRealWeddings = onSnapshot(collection(db, "real_weddings"), (snapshot) => {
@@ -176,8 +201,10 @@ export default function App() {
         docs.push({ id: doc.id, ...doc.data() });
       });
       setRealWeddings(docs);
+      checkAllLoaded('realWeddings');
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar casamentos reais:", error);
+      checkAllLoaded('realWeddings');
     });
 
     const unsubscribeBlogPosts = onSnapshot(collection(db, "blog_posts"), (snapshot) => {
@@ -186,8 +213,10 @@ export default function App() {
         docs.push({ id: doc.id, ...doc.data() });
       });
       setBlogPosts(docs);
+      checkAllLoaded('blogPosts');
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar blog posts:", error);
+      checkAllLoaded('blogPosts');
     });
 
     const unsubscribeContato = onSnapshot(doc(db, "configuracoes", "contato"), (docSnap) => {
@@ -870,6 +899,25 @@ export default function App() {
 
   const coverPortfolioPhoto = portfolio.find((p) => p.banner === true) || portfolio.find((p) => p.destaque === true);
   const coverPortfolioUrl = coverPortfolioPhoto ? coverPortfolioPhoto.url : 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1920&q=80';
+
+  // Renderização do Estado de Carregamento Editorial (Spinner)
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center font-sans text-stone-900 animate-fade-in">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 bg-stone-900 text-white rounded flex items-center justify-center font-serif text-lg tracking-widest shadow-sm mx-auto animate-spin" style={{ animationDuration: '3s' }}>
+            W
+          </div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-stone-400">Wilkson Fotografias</p>
+          <div className="flex justify-center items-center gap-1.5 pt-2">
+            <span className="w-1.5 h-1.5 bg-stone-900 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 bg-stone-900 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 bg-stone-900 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Renderização específica para link mágico (?gallery=token)
   if (activeTab === 'magic-client' && selectedGalleryToken) {

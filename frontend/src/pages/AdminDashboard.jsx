@@ -53,7 +53,9 @@ export default function AdminDashboard({
   
   const totalBandwidthBytes = eventos.reduce((sum, evt) => {
     const eventPhotosSize = (evt.fotos || []).reduce((fSum, f) => fSum + (f.size || 150 * 1024), 0);
-    return sum + (evt.views || 0) * eventPhotosSize;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dailyViews = evt.ultima_visualizacao_data === todayStr ? (evt.views_diarias || 0) : 0;
+    return sum + dailyViews * eventPhotosSize;
   }, 0);
   
   const bandwidthPercentage = Math.min(100, (totalBandwidthBytes / (1 * 1024 * 1024 * 1024)) * 100).toFixed(1);

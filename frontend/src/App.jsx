@@ -279,12 +279,33 @@ export default function App() {
           if (!sessionStorage.getItem(viewedSessionKey)) {
             sessionStorage.setItem(viewedSessionKey, 'true');
             if (db) {
+              const todayStr = new Date().toISOString().split('T')[0];
               const currentViews = matchedEvent.views || 0;
-              updateDoc(doc(db, "eventos", matchedEvent.id), { views: currentViews + 1 })
-                .then(() => console.log("[FIREBASE] Visualização incrementada:", matchedEvent.id))
+              let currentViewsDiarias = matchedEvent.views_diarias || 0;
+              if (matchedEvent.ultima_visualizacao_data !== todayStr) {
+                currentViewsDiarias = 0;
+              }
+              updateDoc(doc(db, "eventos", matchedEvent.id), { 
+                views: currentViews + 1,
+                views_diarias: currentViewsDiarias + 1,
+                ultima_visualizacao_data: todayStr
+              })
+                .then(() => console.log("[FIREBASE] Visualização diária incrementada:", matchedEvent.id))
                 .catch(err => console.error("[FIREBASE] Erro ao incrementar views:", err));
             } else {
-              setEventos(prev => prev.map(e => e.id === matchedEvent.id ? { ...e, views: (e.views || 0) + 1 } : e));
+              const todayStr = new Date().toISOString().split('T')[0];
+              setEventos(prev => prev.map(e => {
+                if (e.id === matchedEvent.id) {
+                  const isNewDay = e.ultima_visualizacao_data !== todayStr;
+                  return { 
+                    ...e, 
+                    views: (e.views || 0) + 1,
+                    views_diarias: isNewDay ? 1 : (e.views_diarias || 0) + 1,
+                    ultima_visualizacao_data: todayStr
+                  };
+                }
+                return e;
+              }));
             }
           }
         }

@@ -733,14 +733,14 @@ Qualquer dúvida estou à disposição!`);
             <div className="bg-white border border-stone-200/80 rounded-xl p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Tráfego Estimado (Banda Diária)</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Tráfego de Banda Estimado</h4>
                   <p className="text-xl font-serif-editorial text-stone-900 mt-1 font-light">
                     {totalBandwidthBytes < 1024 * 1024
                       ? `${(totalBandwidthBytes / 1024).toFixed(1)} KB`
                       : totalBandwidthBytes < 1024 * 1024 * 1024
                         ? `${(totalBandwidthBytes / (1024 * 1024)).toFixed(1)} MB`
                         : `${(totalBandwidthBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`}
-                    <span className="text-xs text-stone-450 font-sans ml-1.5 font-normal">de 1.0 GB/dia</span>
+                    <span className="text-xs text-stone-450 font-sans ml-1.5 font-normal">de 1.0 GB/dia (Storage)</span>
                   </p>
                 </div>
                 <span className="text-xs font-mono font-bold text-stone-900 bg-stone-50 border border-stone-200 px-2 py-0.5 rounded">
@@ -756,7 +756,7 @@ Qualquer dúvida estou à disposição!`);
                 ></div>
               </div>
               <p className="text-[8px] text-stone-400 uppercase tracking-wider mt-2.5">
-                Banda consumida pelos clientes ao acessar e carregar as galerias.
+                Banda acumulada das galerias. A cota real de 1 GB do Firebase Storage é zerada diariamente pelo Google à meia-noite.
               </p>
             </div>
           </div>

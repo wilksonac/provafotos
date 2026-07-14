@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const getEventStatus = (evento) => {
   if (evento.status === 'finalizada') return 'finalizada';
@@ -14,12 +14,17 @@ const getEventStatus = (evento) => {
 export default function AdminDashboard({
   clientes = [],
   eventos = [],
+  selecoes = [],
   portfolio = [],
   realWeddings = [],
   blogPosts = [],
   onAddCliente,
   onAddEvento,
   onUpdateEvento,
+  onAssociateClientToEvent,
+  onUnassociateClient,
+  onUpdateClientSelectionLimit,
+  onUpdateClientSelectionExtras,
   onSelectEventUpload,
   onSelectEventView,
   onConfirmPayment,
@@ -39,7 +44,13 @@ export default function AdminDashboard({
   contato,
   onSaveContato,
   templateMensagem,
-  onSaveTemplateMensagem
+  onSaveTemplateMensagem,
+  categoriasFornecedores = [],
+  fornecedores = [],
+  onSaveCategoryExplanation,
+  onAddVendor,
+  onUpdateVendor,
+  onDeleteVendor
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
@@ -101,6 +112,7 @@ export default function AdminDashboard({
   const [tipoGaleria, setTipoGaleria] = useState('ensaio');
   const [permitirDownload, setPermitirDownload] = useState(false);
   const [acessoRestrito, setAcessoRestrito] = useState(false);
+  const [permitirAutoCadastro, setPermitirAutoCadastro] = useState(true);
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
@@ -110,6 +122,30 @@ export default function AdminDashboard({
 
   // Estados e Handlers do Portfólio Admin
   const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
+
+  // Estados para Fornecedores e Dicas Admin
+  const [vendorAdminTab, setVendorAdminTab] = useState('tips'); // 'tips' | 'vendors'
+  const [selectedEditCategory, setSelectedEditCategory] = useState('aliancas');
+  const [categoryExplanationText, setCategoryExplanationText] = useState('');
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState(null);
+  const [vendorForm, setVendorForm] = useState({
+    nome: '',
+    categoriaId: 'aliancas',
+    descricao: '',
+    cidade: '',
+    contato: '',
+    link_instagram: '',
+    link_web: '',
+    destaque: false
+  });
+  const [filterVendorCategory, setFilterVendorCategory] = useState('all');
+
+  // Sincroniza a explicação quando a categoria selecionada mudar
+  React.useEffect(() => {
+    const cat = categoriasFornecedores.find(c => c.id === selectedEditCategory);
+    setCategoryExplanationText(cat ? cat.explicacao : '');
+  }, [selectedEditCategory, categoriasFornecedores]);
 
   // Novos Estados para Casamentos Reais (Histórias)
   const [isAddingWedding, setIsAddingWedding] = useState(false);
@@ -354,7 +390,8 @@ export default function AdminDashboard({
         marca_dagua_estilo: marcaDaguaEstilo,
         tipo_galeria: tipoGaleria,
         permitir_download: permitirDownload,
-        acesso_restrito: acessoRestrito
+        acesso_restrito: acessoRestrito,
+        permitir_auto_cadastro: permitirAutoCadastro
       };
       onUpdateEvento(editingEventId, updatedFields);
       setEditingEventId(null);
@@ -376,7 +413,9 @@ export default function AdminDashboard({
         tipo_galeria: tipoGaleria,
         permitir_download: permitirDownload,
         pagamento_extras_confirmado: false,
-        acesso_restrito: acessoRestrito
+        acesso_restrito: acessoRestrito,
+        permitir_auto_cadastro: permitirAutoCadastro,
+        clientes_permitidos: targetClientId ? [targetClientId] : []
       };
       onAddEvento(newEvent, clientObj);
     }
@@ -395,6 +434,7 @@ export default function AdminDashboard({
     setTipoGaleria('ensaio');
     setPermitirDownload(true);
     setAcessoRestrito(false);
+    setPermitirAutoCadastro(true);
     setActiveSubTab('overview');
   };
 
@@ -423,6 +463,7 @@ export default function AdminDashboard({
     setTipoGaleria(evento.tipo_galeria || 'ensaio');
     setPermitirDownload(evento.permitir_download !== undefined ? !!evento.permitir_download : false);
     setAcessoRestrito(!!evento.acesso_restrito);
+    setPermitirAutoCadastro(evento.permitir_auto_cadastro !== undefined ? !!evento.permitir_auto_cadastro : true);
 
     setEditingEventId(evento.id);
     setActiveSubTab('new-gallery');
@@ -439,6 +480,7 @@ export default function AdminDashboard({
   // Share Modal States
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [sharingEvent, setSharingEvent] = useState(null);
+  const [sharingClient, setSharingClient] = useState(null);
   const [shareForm, setShareForm] = useState({
     observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
     emailSuporte: 'wilkson@gmail.com',
@@ -467,10 +509,10 @@ export default function AdminDashboard({
   };
 
   const getCompiledMessage = (event, client, form, customTemplate = null) => {
-    if (!event || !client) return '';
+    if (!event) return '';
     const link = getShareLink(event.token);
     const dateFormatted = formatEventDate(form.prazo || event.data);
-    const senhaText = event.acesso_restrito ? (client.senha || '123456') : '(Acesso direto por link)';
+    const senhaText = event.acesso_restrito ? (client?.senha || '123456') : '(Acesso direto por link)';
     
     let template = customTemplate !== null ? customTemplate : (templateMensagem || `Oi, {nome}. Tudo bem?
 
@@ -488,11 +530,11 @@ Qualquer dúvida estou à disposição!`);
     let obsText = form.observacoes ? `${form.observacoes}\n` : '';
 
     template = template
-      .replace(/{nome}/g, client.nome || '')
+      .replace(/{nome}/g, client?.nome || '')
       .replace(/{titulo}/g, event.titulo || '')
       .replace(/{prazo}/g, dateFormatted || '')
       .replace(/{link}/g, link || '')
-      .replace(/{email}/g, client.email || '')
+      .replace(/{email}/g, client?.email || '')
       .replace(/{senha}/g, senhaText || '')
       .replace(/{observacoes}/g, obsText);
 
@@ -500,8 +542,27 @@ Qualquer dúvida estou à disposição!`);
   };
 
   const handleOpenShareModal = (evento) => {
-    const client = clientes.find((c) => c.id === evento.id_cliente);
+    const getClientsForEvent = (evt) => {
+      const list = [];
+      const clientIds = new Set(evt.clientes_permitidos || []);
+      if (evt.id_cliente) clientIds.add(evt.id_cliente);
+      (selecoes || []).forEach(s => {
+        if (s.id_evento === evt.id) {
+          clientIds.add(s.id_cliente);
+        }
+      });
+      clientIds.forEach(id => {
+        const c = clientes.find(client => client.id === id);
+        if (c) list.push(c);
+      });
+      return list;
+    };
+
+    const associated = getClientsForEvent(evento);
+    const primaryClient = associated[0] || null;
+
     setSharingEvent(evento);
+    setSharingClient(primaryClient);
     setIsCustomMessageEdited(false);
     setTempTemplate(templateMensagem || '');
     
@@ -513,7 +574,7 @@ Qualquer dúvida estou à disposição!`);
       customMessage: ''
     };
     
-    initialForm.customMessage = getCompiledMessage(evento, client, initialForm, templateMensagem || null);
+    initialForm.customMessage = getCompiledMessage(evento, primaryClient, initialForm, templateMensagem || null);
     setShareForm(initialForm);
     setIsShareModalOpen(true);
   };
@@ -522,8 +583,7 @@ Qualquer dúvida estou à disposição!`);
     const newForm = { ...shareForm, [field]: value };
     
     if (!isCustomMessageEdited) {
-      const client = clientes.find((c) => c.id === sharingEvent.id_cliente);
-      newForm.customMessage = getCompiledMessage(sharingEvent, client, newForm, tempTemplate || null);
+      newForm.customMessage = getCompiledMessage(sharingEvent, sharingClient, newForm, tempTemplate || null);
     }
     
     setShareForm(newForm);
@@ -535,11 +595,10 @@ Qualquer dúvida estou à disposição!`);
   };
 
   const handleResetMessage = () => {
-    const client = clientes.find((c) => c.id === sharingEvent.id_cliente);
     setIsCustomMessageEdited(false);
     setShareForm({
       ...shareForm,
-      customMessage: getCompiledMessage(sharingEvent, client, shareForm, tempTemplate || null)
+      customMessage: getCompiledMessage(sharingEvent, sharingClient, shareForm, tempTemplate || null)
     });
   };
 
@@ -671,6 +730,16 @@ Qualquer dúvida estou à disposição!`);
                 }`}
               >
                 Dicas / Blog
+              </button>
+              <button
+                onClick={() => setActiveSubTab('fornecedores')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'fornecedores'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                Fornecedores
               </button>
               <button
                 onClick={() => setActiveSubTab('contato')}
@@ -839,7 +908,7 @@ Qualquer dúvida estou à disposição!`);
                       <thead>
                         <tr className="bg-stone-50 border-b border-stone-150 text-[10px] font-bold uppercase tracking-widest text-stone-500">
                           <th className="py-4.5 px-6">Título da Galeria</th>
-                          <th className="py-4.5 px-6">Cliente Vinculado</th>
+                          <th className="py-4.5 px-6">Clientes / Acessos</th>
                           <th className="py-4.5 px-6">Fotos</th>
                           <th className="py-4.5 px-6">Limite / Regra</th>
                           <th className="py-4.5 px-6">Status</th>
@@ -848,9 +917,25 @@ Qualquer dúvida estou à disposição!`);
                       </thead>
                       <tbody className="divide-y divide-stone-100 text-sm">
                         {filteredEventos.map((evento) => {
-                          const client = clientes.find((c) => c.id === evento.id_cliente);
                           const computedStatus = getEventStatus(evento);
                           
+                          const getClientsForEvent = (evt) => {
+                            const list = [];
+                            const clientIds = new Set(evt.clientes_permitidos || []);
+                            if (evt.id_cliente) clientIds.add(evt.id_cliente);
+                            (selecoes || []).forEach(s => {
+                              if (s.id_evento === evt.id) {
+                                clientIds.add(s.id_cliente);
+                              }
+                            });
+                            clientIds.forEach(id => {
+                              const c = clientes.find(client => client.id === id);
+                              if (c) list.push(c);
+                            });
+                            return list;
+                          };
+                          const associatedClients = getClientsForEvent(evento);
+
                           return (
                             <tr key={evento.id} className="hover:bg-stone-50/50 transition-colors">
                               <td className="py-4 px-6 font-medium text-stone-900">
@@ -875,57 +960,153 @@ Qualquer dúvida estou à disposição!`);
                                   <span className="text-[10px] text-stone-400 font-sans uppercase font-semibold">{evento.data}</span>
                                 </div>
                               </td>
-                              <td className="py-4 px-6 text-stone-500">
-                                {client ? (
-                                  <div>
-                                    <span className="block text-stone-800 font-medium">{client.nome}</span>
-                                    <span className="text-xs text-stone-400">{client.email}</span>
+                              <td className="py-4 px-6 text-stone-700 max-w-[280px]">
+                                <div className="space-y-3">
+                                  {associatedClients.length === 0 ? (
+                                    <span className="text-xs text-stone-400 italic">Nenhum cliente vinculado</span>
+                                  ) : (
+                                    associatedClients.map((c) => {
+                                      const selectionId = `${evento.id}_${c.id}`;
+                                      const activeSel = (selecoes || []).find(s => s.id === selectionId);
+                                      const selectedPhotoIds = activeSel ? (activeSel.fotos_selecionadas || []) : [];
+                                      const selecionadasCount = selectedPhotoIds.length;
+                                      const statusSel = activeSel ? activeSel.status : 'não_iniciou';
+
+                                      const targetPhotos = (evento.fotos || []).filter(f => selectedPhotoIds.includes(f.id));
+                                      const lrNames = targetPhotos.map(f => f.name.replace(/\.[^/.]+$/, "")).join(', ');
+                                      const winNames = targetPhotos.map(f => f.name).join(' OR ');
+
+                                      return (
+                                        <div key={c.id} className="p-2.5 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5 text-xs">
+                                          <div className="flex items-start justify-between gap-1.5">
+                                            <div className="truncate flex-grow flex items-start gap-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (confirm(`Deseja realmente desvincular o cliente "${c.nome}" desta galeria?`)) {
+                                                    onUnassociateClient(evento.id, c.id);
+                                                  }
+                                                }}
+                                                className="text-stone-350 hover:text-red-650 transition-colors font-bold text-[10px] mt-0.5 flex-shrink-0"
+                                                title="Desvincular Cliente"
+                                              >
+                                                ✕
+                                              </button>
+                                              <div className="truncate">
+                                                <span className="block font-semibold text-stone-850 truncate" title={c.nome}>{c.nome}</span>
+                                                <span className="text-[9px] text-stone-400 block truncate" title={c.email}>{c.email}</span>
+                                              </div>
+                                            </div>
+                                            <span className={`inline-block text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                                              statusSel === 'finalizada'
+                                                ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
+                                                : statusSel === 'em_progresso'
+                                                ? 'bg-amber-50 border-amber-250 text-amber-700'
+                                                : 'bg-stone-100 border-stone-200 text-stone-400'
+                                            }`}>
+                                              {statusSel === 'finalizada' ? 'Finalizada' : statusSel === 'em_progresso' ? 'Em Aberto' : 'Não Iniciou'}
+                                            </span>
+                                          </div>
+                                          
+                                          <div className="flex items-center justify-between text-[9px] border-t border-stone-200/50 pt-1.5 gap-2 flex-wrap">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              {evento.selecao_livre ? (
+                                                <span className="text-stone-500 font-medium">Selecionou: <strong>{selecionadasCount}</strong> fotos</span>
+                                              ) : (
+                                                <div className="flex items-center gap-1 text-stone-500 font-medium flex-wrap">
+                                                  <span>Selecionou: <strong>{selecionadasCount}</strong> de</span>
+                                                  <ClientLimitInput
+                                                    eventId={evento.id}
+                                                    clientId={c.id}
+                                                    initialValue={activeSel?.limite_fotos}
+                                                    placeholder={String(evento.limite_fotos || 'Sem limite')}
+                                                    onUpdate={onUpdateClientSelectionLimit}
+                                                  />
+                                                </div>
+                                              )}
+                                              
+                                              {!evento.selecao_livre && (
+                                                <div className="ml-1 pl-1 border-l border-stone-250 flex items-center">
+                                                  <ClientExtrasCheckbox
+                                                    eventId={evento.id}
+                                                    clientId={c.id}
+                                                    initialValue={activeSel?.permitir_extras !== undefined && activeSel?.permitir_extras !== null ? activeSel.permitir_extras : evento.permitir_extras}
+                                                    onUpdate={onUpdateClientSelectionExtras}
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+                                            
+                                            {statusSel === 'finalizada' && (
+                                              <button
+                                                onClick={() => {
+                                                  if (confirm(`Deseja reabrir a seleção para o cliente "${c.nome}"?`)) {
+                                                    onReopenEvento(evento.id, c.id);
+                                                  }
+                                                }}
+                                                className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0"
+                                              >
+                                                Reabrir
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {selecionadasCount > 0 && (
+                                            <div className="flex gap-1 pt-1 border-t border-stone-100/50 mt-1">
+                                              <button
+                                                onClick={() => {
+                                                  navigator.clipboard.writeText(lrNames);
+                                                  alert(`Lightroom para ${c.nome} copiado!`);
+                                                }}
+                                                className="px-1.5 py-0.5 bg-white hover:bg-stone-100 border border-stone-200 rounded text-[7.5px] font-bold text-stone-600 hover:text-stone-850 uppercase tracking-wider transition-colors truncate max-w-[100px]"
+                                                title={`Copiar Lightroom:\n${lrNames}`}
+                                              >
+                                                Lightroom
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  navigator.clipboard.writeText(winNames);
+                                                  alert(`Windows para ${c.nome} copiado!`);
+                                                }}
+                                                className="px-1.5 py-0.5 bg-white hover:bg-stone-100 border border-stone-200 rounded text-[7.5px] font-bold text-stone-600 hover:text-stone-850 uppercase tracking-wider transition-colors truncate max-w-[100px]"
+                                                title={`Copiar Windows:\n${winNames}`}
+                                              >
+                                                Windows
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  )}
+
+                                  <div className="pt-1">
+                                    <InlineAssociateClient
+                                      evento={evento}
+                                      clientes={clientes}
+                                      associatedClients={associatedClients}
+                                      onAssociate={(clientId, customLimit, customExtras) => {
+                                        onAssociateClientToEvent(evento.id, clientId);
+                                        if (customLimit) {
+                                          onUpdateClientSelectionLimit(evento.id, clientId, customLimit);
+                                        }
+                                        onUpdateClientSelectionExtras(evento.id, clientId, customExtras);
+                                      }}
+                                      onAddAndAssociate={(newClientData, customLimit, customExtras) => {
+                                        const newClient = onAddCliente(newClientData);
+                                        onAssociateClientToEvent(evento.id, newClient.id);
+                                        if (customLimit) {
+                                          onUpdateClientSelectionLimit(evento.id, newClient.id, customLimit);
+                                        }
+                                        onUpdateClientSelectionExtras(evento.id, newClient.id, customExtras);
+                                      }}
+                                    />
                                   </div>
-                                ) : (
-                                  <span className="text-xs text-red-500">Cliente Desconectado</span>
-                                )}
+                                </div>
                               </td>
                               <td className="py-4 px-6 text-stone-700">
                                 <span className="block font-semibold">{(evento.fotos || []).length} fotos</span>
-                                {(() => {
-                                  const selecionadas = (evento.fotos || []).filter(f => f.selecionada);
-                                  if (selecionadas.length === 0) return null;
-                                  
-                                  // Lightroom: DSC_0001, DSC_0002
-                                  const lrNames = selecionadas.map(f => f.name.replace(/\.[^/.]+$/, "")).join(', ');
-                                  // Windows: DSC_0001.jpg OR DSC_0002.jpg
-                                  const winNames = selecionadas.map(f => f.name).join(' OR ');
-
-                                  return (
-                                    <div className="mt-2 space-y-1 animate-fade-in">
-                                      <span className="block text-[9px] font-bold text-stone-400 uppercase tracking-widest">
-                                        {selecionadas.length} selecionadas
-                                      </span>
-                                      <div className="flex flex-col gap-1">
-                                        <button
-                                          onClick={() => {
-                                            navigator.clipboard.writeText(lrNames);
-                                            alert("Nomes copiados no padrão Lightroom!");
-                                          }}
-                                          className="px-1.5 py-0.5 bg-stone-100 hover:bg-stone-200 border border-stone-250 rounded text-[8px] font-bold text-stone-600 hover:text-stone-800 uppercase tracking-wider text-left transition-colors truncate max-w-[120px]"
-                                          title={`Copiar no padrão Lightroom (com vírgulas):\n${lrNames}`}
-                                        >
-                                          &bull; Copiar Lightroom
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            navigator.clipboard.writeText(winNames);
-                                            alert("Nomes copiados no padrão Windows!");
-                                          }}
-                                          className="px-1.5 py-0.5 bg-stone-100 hover:bg-stone-200 border border-stone-250 rounded text-[8px] font-bold text-stone-600 hover:text-stone-800 uppercase tracking-wider text-left transition-colors truncate max-w-[120px]"
-                                          title={`Copiar no padrão Windows (separado por OR):\n${winNames}`}
-                                        >
-                                          &bull; Copiar Windows
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
+                                <span className="text-[10px] text-stone-400 block mt-0.5">Disponibilizadas</span>
                               </td>
                               <td className="py-4 px-6 text-stone-600 font-medium">
                                 {evento.selecao_livre ? (
@@ -1474,7 +1655,7 @@ Qualquer dúvida estou à disposição!`);
             )}
 
             {/* Permissão de Downloads e Regras de Segurança */}
-            <div className="border-t border-stone-150 pt-3.5 mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="border-t border-stone-150 pt-3.5 mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -1483,7 +1664,7 @@ Qualquer dúvida estou à disposição!`);
                   className="sr-only peer"
                 />
                 <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
-                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Download das Selecionadas</span>
+                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Download</span>
               </label>
 
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1494,7 +1675,18 @@ Qualquer dúvida estou à disposição!`);
                   className="sr-only peer"
                 />
                 <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
-                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Exigir Login e Senha para Acesso</span>
+                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Exigir Login e Senha</span>
+              </label>
+
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={permitirAutoCadastro}
+                  onChange={(e) => setPermitirAutoCadastro(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
+                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Auto-Cadastro</span>
               </label>
             </div>
           </div>
@@ -2308,6 +2500,384 @@ Qualquer dúvida estou à disposição!`);
         </div>
       )}
 
+      {/* Sub-tab 7.5: Fornecedores / Recomendações */}
+      {activeSubTab === 'fornecedores' && (
+        <div className="animate-scale-in space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-stone-200 pb-4">
+            <div>
+              <h3 className="font-serif-editorial text-xl text-stone-900 font-light">Gerenciamento de Fornecedores & Guia</h3>
+              <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed mt-0.5">
+                Crie dicas para a noiva e indique parceiros de confiança na cidade
+              </p>
+            </div>
+            
+            <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 flex-nowrap gap-0.5">
+              <button
+                onClick={() => setVendorAdminTab('tips')}
+                className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
+                  vendorAdminTab === 'tips'
+                    ? 'bg-stone-900 text-white shadow-xs'
+                    : 'text-stone-400 hover:text-stone-700'
+                }`}
+              >
+                Dicas de Escolha
+              </button>
+              <button
+                onClick={() => setVendorAdminTab('vendors')}
+                className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${
+                  vendorAdminTab === 'vendors'
+                    ? 'bg-stone-900 text-white shadow-xs'
+                    : 'text-stone-400 hover:text-stone-700'
+                }`}
+              >
+                Lista de Fornecedores
+              </button>
+            </div>
+          </div>
+
+          {/* Aba A: Dicas por Categoria */}
+          {vendorAdminTab === 'tips' && (
+            <div className="bg-white border border-stone-200 rounded-xl p-6 shadow-xs max-w-2xl mx-auto space-y-5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Selecione a Categoria para Editar</label>
+                <select
+                  value={selectedEditCategory}
+                  onChange={(e) => setSelectedEditCategory(e.target.value)}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                >
+                  {categoriasFornecedores.length > 0 ? (
+                    categoriasFornecedores.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="aliancas">Alianças</option>
+                      <option value="buffet">Buffet</option>
+                      <option value="local">Espaço / Local</option>
+                      <option value="decoracao">Decoração</option>
+                      <option value="vestido">Vestido de Noiva</option>
+                      <option value="cerimonial">Cerimonial</option>
+                      <option value="musica">DJ & Banda</option>
+                      <option value="foto_video">Foto & Vídeo</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Texto Explicativo (Como escolher/Dicas)</label>
+                <textarea
+                  rows="8"
+                  value={categoryExplanationText}
+                  onChange={(e) => setCategoryExplanationText(e.target.value)}
+                  placeholder="Escreva dicas e explicações detalhadas para ajudar a noiva a planejar essa categoria de fornecedores..."
+                  className="w-full px-4 py-3 border border-stone-200 rounded-lg text-xs leading-relaxed focus:ring-1 focus:ring-stone-400 focus:outline-none font-light"
+                />
+              </div>
+
+              <button
+                onClick={async () => {
+                  if (onSaveCategoryExplanation) {
+                    try {
+                      await onSaveCategoryExplanation(selectedEditCategory, categoryExplanationText);
+                      alert("Explicação da categoria salva com sucesso!");
+                    } catch (err) {
+                      alert("Erro ao salvar explicação: " + err.message);
+                    }
+                  }
+                }}
+                className="w-full py-3 bg-stone-900 hover:bg-stone-855 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow-md"
+              >
+                Salvar Dicas da Categoria
+              </button>
+            </div>
+          )}
+
+          {/* Aba B: Gerenciar Fornecedores */}
+          {vendorAdminTab === 'vendors' && (
+            <div className="space-y-6">
+              {/* Filtros e Ação */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-stone-50/50 border border-stone-200/80 p-4 rounded-xl">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap">Filtrar Categoria:</span>
+                  <select
+                    value={filterVendorCategory}
+                    onChange={(e) => setFilterVendorCategory(e.target.value)}
+                    className="px-3 py-1.5 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none w-full sm:w-auto"
+                  >
+                    <option value="all">Todas as Categorias</option>
+                    {categoriasFornecedores.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingVendorId(null);
+                    setVendorForm({
+                      nome: '',
+                      categoriaId: selectedEditCategory || 'aliancas',
+                      descricao: '',
+                      cidade: '',
+                      contato: '',
+                      link_instagram: '',
+                      link_web: '',
+                      destaque: false
+                    });
+                    setIsVendorModalOpen(true);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-stone-900 hover:bg-stone-850 text-white text-[10px] font-bold uppercase tracking-widest rounded transition-all shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <span>+ Adicionar Fornecedor</span>
+                </button>
+              </div>
+
+              {/* Tabela de Fornecedores */}
+              {(() => {
+                const filtered = filterVendorCategory === 'all' 
+                  ? fornecedores 
+                  : fornecedores.filter(f => f.categoriaId === filterVendorCategory);
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-16 border border-dashed border-stone-200 rounded-xl bg-white text-stone-450 font-serif-editorial">
+                      <p className="text-sm">Nenhum fornecedor cadastrado ou encontrado com este filtro.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-stone-50 border-b border-stone-200 text-stone-400 font-bold uppercase tracking-widest text-[9px]">
+                            <th className="py-3.5 px-4">Nome</th>
+                            <th className="py-3.5 px-4">Categoria</th>
+                            <th className="py-3.5 px-4">Cidade</th>
+                            <th className="py-3.5 px-4">Contato</th>
+                            <th className="py-3.5 px-4 text-center">Destaque</th>
+                            <th className="py-3.5 px-4 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-150">
+                          {filtered.map((vendor) => {
+                            const cat = categoriasFornecedores.find(c => c.id === vendor.categoriaId);
+                            return (
+                              <tr key={vendor.id} className="hover:bg-stone-50/40 transition-colors">
+                                <td className="py-3 px-4 font-medium text-stone-900">{vendor.nome}</td>
+                                <td className="py-3 px-4 text-stone-500 capitalize">{cat?.nome || vendor.categoriaId}</td>
+                                <td className="py-3 px-4 text-stone-500">{vendor.cidade || '-'}</td>
+                                <td className="py-3 px-4 text-stone-500 font-mono text-[10px]">{vendor.contato}</td>
+                                <td className="py-3 px-4 text-center">
+                                  {vendor.destaque ? (
+                                    <span className="text-[8px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded">Sim</span>
+                                  ) : (
+                                    <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 bg-stone-50 border border-stone-200/50 px-2 py-0.5 rounded">Não</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-right space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingVendorId(vendor.id);
+                                      setVendorForm({
+                                        nome: vendor.nome || '',
+                                        categoriaId: vendor.categoriaId || 'aliancas',
+                                        descricao: vendor.descricao || '',
+                                        cidade: vendor.cidade || '',
+                                        contato: vendor.contato || '',
+                                        link_instagram: vendor.link_instagram || '',
+                                        link_web: vendor.link_web || '',
+                                        destaque: !!vendor.destaque
+                                      });
+                                      setIsVendorModalOpen(true);
+                                    }}
+                                    className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-stone-600 hover:text-stone-900 border border-stone-200 hover:bg-stone-50 rounded"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm(`Deseja realmente remover o fornecedor "${vendor.nome}"?`)) {
+                                        if (onDeleteVendor) {
+                                          try {
+                                            await onDeleteVendor(vendor.id);
+                                          } catch (err) {
+                                            alert("Erro ao excluir: " + err.message);
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-red-650 hover:text-red-700 border border-red-200 hover:bg-red-50 rounded"
+                                  >
+                                    Excluir
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal Adicionar/Editar Fornecedor */}
+      {isVendorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-in">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-stone-150 flex items-center justify-between bg-stone-50">
+              <div>
+                <h3 className="font-serif-editorial text-base text-stone-900">
+                  {editingVendorId ? 'Editar Fornecedor' : 'Adicionar Fornecedor'}
+                </h3>
+                <p className="text-[9px] text-stone-400 uppercase tracking-widest font-bold mt-0.5">
+                  Preencha as informações do parceiro recomendado
+                </p>
+              </div>
+              <button
+                onClick={() => setIsVendorModalOpen(false)}
+                className="text-stone-400 hover:text-stone-700 text-xl font-bold px-2 py-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                if (editingVendorId) {
+                  if (onUpdateVendor) await onUpdateVendor(editingVendorId, vendorForm);
+                } else {
+                  if (onAddVendor) await onAddVendor(vendorForm);
+                }
+                setIsVendorModalOpen(false);
+              } catch (err) {
+                alert("Erro ao salvar fornecedor: " + err.message);
+              }
+            }} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Nome da Empresa / Profissional</label>
+                <input
+                  type="text"
+                  required
+                  value={vendorForm.nome}
+                  onChange={(e) => setVendorForm({ ...vendorForm, nome: e.target.value })}
+                  placeholder="Ex: Buffet Requinte"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Categoria</label>
+                <select
+                  value={vendorForm.categoriaId}
+                  onChange={(e) => setVendorForm({ ...vendorForm, categoriaId: e.target.value })}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none"
+                >
+                  {categoriasFornecedores.map(c => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Cidade</label>
+                <input
+                  type="text"
+                  value={vendorForm.cidade}
+                  onChange={(e) => setVendorForm({ ...vendorForm, cidade: e.target.value })}
+                  placeholder="Ex: Campina Grande - PB"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Contato (Telefone / WhatsApp / E-mail)</label>
+                <input
+                  type="text"
+                  required
+                  value={vendorForm.contato}
+                  onChange={(e) => setVendorForm({ ...vendorForm, contato: e.target.value })}
+                  placeholder="Ex: (83) 99999-8888"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Link Instagram (Perfil ou URL)</label>
+                <input
+                  type="text"
+                  value={vendorForm.link_instagram}
+                  onChange={(e) => setVendorForm({ ...vendorForm, link_instagram: e.target.value })}
+                  placeholder="Ex: @buffetrequinte ou instagram.com/..."
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Link Website (URL opcional)</label>
+                <input
+                  type="text"
+                  value={vendorForm.link_web}
+                  onChange={(e) => setVendorForm({ ...vendorForm, link_web: e.target.value })}
+                  placeholder="Ex: www.buffetrequinte.com.br"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Descrição / Recomendações</label>
+                <textarea
+                  rows="3"
+                  value={vendorForm.descricao}
+                  onChange={(e) => setVendorForm({ ...vendorForm, descricao: e.target.value })}
+                  placeholder="Descreva as qualidades, especialidades e o porquê você recomenda esse fornecedor..."
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="vendorDestaque"
+                  checked={vendorForm.destaque}
+                  onChange={(e) => setVendorForm({ ...vendorForm, destaque: e.target.checked })}
+                  className="w-3.5 h-3.5 border-stone-300 text-stone-900 rounded focus:ring-stone-400"
+                />
+                <label htmlFor="vendorDestaque" className="text-[10px] font-bold uppercase tracking-widest text-stone-500 cursor-pointer">
+                  Marcar como Destaque (Recomendação Especial)
+                </label>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setIsVendorModalOpen(false)}
+                  className="px-4 py-2 border border-stone-200 hover:bg-stone-50 text-[10px] font-bold uppercase tracking-widest text-stone-500 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-stone-900 hover:bg-stone-850 text-white text-[10px] font-bold uppercase tracking-widest rounded transition-all shadow-xs"
+                >
+                  {editingVendorId ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Share Modal */}
       {isShareModalOpen && sharingEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
@@ -2339,6 +2909,52 @@ Qualquer dúvida estou à disposição!`);
                 <span className="text-[11px] font-extrabold uppercase tracking-widest text-stone-500 block mb-2 border-b border-stone-100 pb-1">
                   Parâmetros da Mensagem
                 </span>
+
+                {(() => {
+                  const getClientsForEvent = (evt) => {
+                    const list = [];
+                    const clientIds = new Set(evt.clientes_permitidos || []);
+                    if (evt.id_cliente) clientIds.add(evt.id_cliente);
+                    (selecoes || []).forEach(s => {
+                      if (s.id_evento === evt.id) {
+                        clientIds.add(s.id_cliente);
+                      }
+                    });
+                    clientIds.forEach(id => {
+                      const c = clientes.find(client => client.id === id);
+                      if (c) list.push(c);
+                    });
+                    return list;
+                  };
+                  const associatedClients = getClientsForEvent(sharingEvent);
+                  if (associatedClients.length <= 1) return null;
+
+                  return (
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                        Selecionar Cliente Destinatário
+                      </label>
+                      <select
+                        value={sharingClient?.id || ''}
+                        onChange={(e) => {
+                          const targetClient = associatedClients.find(c => c.id === e.target.value);
+                          setSharingClient(targetClient);
+                          if (targetClient) {
+                            setShareForm(prev => ({
+                              ...prev,
+                              customMessage: getCompiledMessage(sharingEvent, targetClient, prev, tempTemplate || null)
+                            }));
+                          }
+                        }}
+                        className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-white"
+                      >
+                        {associatedClients.map(c => (
+                          <option key={c.id} value={c.id}>{c.nome} ({c.email})</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
                 
                 <div>
                   <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
@@ -2403,10 +3019,9 @@ Qualquer dúvida estou à disposição!`);
                     onChange={(e) => {
                       setTempTemplate(e.target.value);
                       if (!isCustomMessageEdited) {
-                        const client = clientes.find((c) => c.id === sharingEvent.id_cliente);
                         setShareForm(prev => ({
                           ...prev,
-                          customMessage: getCompiledMessage(sharingEvent, client, prev, e.target.value)
+                          customMessage: getCompiledMessage(sharingEvent, sharingClient, prev, e.target.value)
                         }));
                       }
                     }}
@@ -2485,7 +3100,7 @@ Qualquer dúvida estou à disposição!`);
                   </button>
                   
                   {(() => {
-                    const client = clientes.find(c => c.id === sharingEvent.id_cliente);
+                    const client = sharingClient;
                     if (!client || !client.telefone) return null;
                     
                     const cleanPhone = client.telefone.replace(/\D/g, '');
@@ -2641,6 +3256,222 @@ Qualquer dúvida estou à disposição!`);
         );
       })()}
 
+    </div>
+  );
+}
+
+function ClientLimitInput({ eventId, clientId, initialValue, placeholder, onUpdate }) {
+  const [val, setVal] = useState(initialValue !== undefined && initialValue !== null ? initialValue : '');
+
+  useEffect(() => {
+    setVal(initialValue !== undefined && initialValue !== null ? initialValue : '');
+  }, [initialValue]);
+
+  const handleChange = (e) => {
+    setVal(e.target.value);
+  };
+
+  const handleBlurOrEnter = () => {
+    onUpdate(eventId, clientId, val);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min="1"
+      value={val}
+      onChange={handleChange}
+      onBlur={handleBlurOrEnter}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className="w-10 px-1 border border-stone-250 rounded text-center text-[9px] font-bold focus:outline-none focus:border-stone-900 bg-white"
+      title="Limite individual (deixe em branco para usar o limite geral. Pressione Enter ou clique fora para salvar)"
+    />
+  );
+}
+
+function ClientExtrasCheckbox({ eventId, clientId, initialValue, onUpdate }) {
+  const [checked, setChecked] = useState(!!initialValue);
+
+  useEffect(() => {
+    setChecked(!!initialValue);
+  }, [initialValue]);
+
+  const handleChange = (e) => {
+    const newVal = e.target.checked;
+    setChecked(newVal);
+    onUpdate(eventId, clientId, newVal);
+  };
+
+  return (
+    <label className="relative inline-flex items-center cursor-pointer select-none" title="Permitir fotos extras para este cliente">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={handleChange}
+        className="sr-only peer"
+      />
+      <div className="w-6 h-3 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-stone-400 after:rounded-full after:h-2 after:w-2 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white font-sans"></div>
+      <span className="ml-1 text-[8px] font-extrabold text-stone-500 uppercase tracking-widest font-sans">Extras</span>
+    </label>
+  );
+}
+
+function InlineAssociateClient({ evento, clientes, associatedClients, onAssociate, onAddAndAssociate }) {
+  const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState('select'); // 'select' | 'new'
+  const [selectedId, setSelectedId] = useState('');
+  const [newClient, setNewClient] = useState({ nome: '', email: '', telefone: '', senha: '' });
+  const [limiteFotos, setLimiteFotos] = useState('');
+  const [permitirExtras, setPermitirExtras] = useState(true);
+
+  const unassociated = clientes.filter(c => !associatedClients.some(ac => ac.id === c.id));
+
+  const handleAssociateClick = () => {
+    if (mode === 'select') {
+      if (!selectedId) return;
+      onAssociate(selectedId, limiteFotos, permitirExtras);
+      setSelectedId('');
+      setLimiteFotos('');
+      setPermitirExtras(true);
+      setShowForm(false);
+    } else {
+      if (!newClient.nome || !newClient.email || !newClient.telefone) {
+        alert("Preencha todos os dados!");
+        return;
+      }
+      onAddAndAssociate(newClient, limiteFotos, permitirExtras);
+      setNewClient({ nome: '', email: '', telefone: '', senha: '' });
+      setLimiteFotos('');
+      setPermitirExtras(true);
+      setShowForm(false);
+    }
+  };
+
+  if (!showForm) {
+    return (
+      <button
+        onClick={() => setShowForm(true)}
+        className="w-full py-1.5 border border-dashed border-stone-300 hover:border-stone-500 rounded-lg text-[9px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-850 transition-colors mt-2"
+      >
+        + Vincular Cliente
+      </button>
+    );
+  }
+
+  return (
+    <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg space-y-3 mt-2 animate-reveal">
+      <div className="flex justify-between items-center border-b border-stone-200/50 pb-1.5">
+        <span className="text-[9px] font-extrabold uppercase tracking-widest text-stone-400">Vincular Acesso</span>
+        <button type="button" onClick={() => setShowForm(false)} className="text-[9px] font-bold text-red-500 hover:text-red-700 uppercase">[ Cancelar ]</button>
+      </div>
+
+      <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/50 text-[8px] font-bold uppercase">
+        <button
+          type="button"
+          onClick={() => setMode('select')}
+          className={`flex-1 py-1 rounded transition-all ${mode === 'select' ? 'bg-white text-stone-905 shadow-2xs' : 'text-stone-400'}`}
+        >
+          Existente
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('new')}
+          className={`flex-1 py-1 rounded transition-all ${mode === 'new' ? 'bg-white text-stone-905 shadow-2xs' : 'text-stone-400'}`}
+        >
+          Novo Cliente
+        </button>
+      </div>
+
+      {mode === 'select' ? (
+        <div>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="w-full p-2 border border-stone-200 rounded text-[11px] focus:outline-none focus:border-stone-900 bg-white"
+          >
+            <option value="">-- Selecione o Cliente --</option>
+            {unassociated.map(c => (
+              <option key={c.id} value={c.id}>{c.nome} ({c.email})</option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div className="space-y-2 text-[11px]">
+          <input
+            type="text"
+            placeholder="Nome Completo"
+            value={newClient.nome}
+            onChange={(e) => setNewClient({ ...newClient, nome: e.target.value })}
+            className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"
+          />
+          <input
+            type="email"
+            placeholder="E-mail"
+            value={newClient.email}
+            onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
+            className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"
+          />
+          <input
+            type="text"
+            placeholder="Telefone"
+            value={newClient.telefone}
+            onChange={(e) => setNewClient({ ...newClient, telefone: e.target.value })}
+            className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"
+          />
+          {evento.acesso_restrito && (
+            <input
+              type="password"
+              placeholder="Senha de Acesso"
+              value={newClient.senha}
+              onChange={(e) => setNewClient({ ...newClient, senha: e.target.value })}
+              className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"
+            />
+          )}
+        </div>
+      )}
+
+      {!evento.selecao_livre && (
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div className="space-y-1">
+            <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400">Limite de Fotos</label>
+            <input
+              type="number"
+              min="1"
+              placeholder={`Geral (${evento.limite_fotos || 'Sem limite'})`}
+              value={limiteFotos}
+              onChange={(e) => setLimiteFotos(e.target.value)}
+              className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"
+            />
+          </div>
+          <div className="flex flex-col justify-end pb-2">
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={permitirExtras}
+                onChange={(e) => setPermitirExtras(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white font-sans"></div>
+              <span className="ml-1 text-[9px] font-extrabold text-stone-750 uppercase tracking-widest font-sans">Fotos Extras</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleAssociateClick}
+        className="w-full py-1.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-[9px] font-bold uppercase tracking-widest transition-all shadow-sm"
+      >
+        Vincular Acesso
+      </button>
     </div>
   );
 }

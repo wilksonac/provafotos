@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AdminDashboard from './pages/AdminDashboard';
 import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
 import { db, auth, storage } from './lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion, deleteField } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -64,6 +64,26 @@ export default function App() {
   const [portfolio, setPortfolio] = useState([]);
   const [realWeddings, setRealWeddings] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
+  const [categoriasFornecedores, setCategoriasFornecedores] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
+  // Derivar selecoes de eventos em tempo real
+  const selecoes = useMemo(() => {
+    const list = [];
+    (eventos || []).forEach(evt => {
+      if (evt.selecoes_clientes) {
+        Object.entries(evt.selecoes_clientes).forEach(([clientId, selData]) => {
+          list.push({
+            id: `${evt.id}_${clientId}`,
+            id_evento: evt.id,
+            id_cliente: clientId,
+            ...selData
+          });
+        });
+      }
+    });
+    return list;
+  }, [eventos]);
+  const [activeClient, setActiveClient] = useState(null);
 
   // Navegação e Controle de Rotas
   const [activeTab, setActiveTab] = useState('client'); // 'client' | 'admin' | 'uploader' | 'magic-client'
@@ -81,6 +101,7 @@ export default function App() {
   // Estados de Exibição de Blog e Histórias
   const [selectedWeddingId, setSelectedWeddingId] = useState(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState(null);
+  const [selectedVendorCategory, setSelectedVendorCategory] = useState('aliancas');
   const [showAllPortfolio, setShowAllPortfolio] = useState(false);
   const [contato, setContato] = useState({
     telefone: '(11) 98888-7777',
@@ -152,30 +173,63 @@ export default function App() {
       checkAllLoaded('clientes'); // garante liberação do loading mesmo em erro
     });
 
+    const defaultCats = [
+      { id: 'aliancas', nome: 'Alianças', explicacao: 'As alianças são o símbolo material da união. Ao escolher, considerem o conforto para o dia a dia, a qualidade do metal (geralmente ouro 18k) e o estilo que combine com a personalidade de ambos. É recomendável encomendar com pelo menos 3 meses de antecedência.' },
+      { id: 'buffet', nome: 'Buffet', explicacao: 'O buffet é um dos pilares do casamento. Avaliem o estilo do serviço (americano, franco-americano ou empratado) de acordo com o perfil dos convidados. Lembrem-se de realizar degustações completas e atentar para restrições alimentares (vegetarianos, intolerantes, etc.).' },
+      { id: 'local', nome: 'Espaço / Local', explicacao: 'A escolha do espaço define toda a logística do evento. Considerem a capacidade de convidados, plano B para casamentos ao ar livre (em caso de chuva), restrições de horário e ruído, e se a infraestrutura de banheiros e cozinha atende aos fornecedores contratados.' },
+      { id: 'decoracao', nome: 'Decoração', explicacao: 'A decoração expressa a identidade visual e o clima do casamento. Reúnam referências de paletas de cores e estilos (clássico, boho, rústico ou minimalista). Definam prioridades de destaque, como o altar e a mesa de doces.' },
+      { id: 'vestido', nome: 'Vestido de Noiva', explicacao: 'O vestido ideal é aquele que faz você se sentir confiante e confortável. Comecem a busca com 8 a 10 meses de antecedência. Considerem o local e o horário da cerimônia na escolha do tecido e corte.' },
+      { id: 'cerimonial', nome: 'Cerimonial', explicacao: 'O cerimonial é o anjo da guarda do casal. Eles organizam o cronograma, coordenam os fornecedores no dia e garantem que tudo corra perfeitamente. Contratar uma assessoria completa desde o início economiza tempo e previne surpresas.' },
+      { id: 'musica', nome: 'DJ & Banda', explicacao: 'A música dita a energia da festa. Escolham profissionais que saibam ler a pista e adaptar o repertório em tempo real. Alinhem previamente a lista de músicas indispensáveis e aquelas que não devem tocar de jeito nenhum.' },
+      { id: 'foto_video', nome: 'Foto & Vídeo', explicacao: 'A fotografia e o vídeo são as lembranças eternas do seu dia. Analisem o portfólio completo dos profissionais para entender seu estilo (documental, posado, fine art). A sintonia pessoal com a equipe é essencial, pois eles estarão ao seu lado o dia todo.' }
+    ];
+
     const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
       const docs = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const normalizedPhotos = (data.fotos || []).map((p, idx) => {
-          if (typeof p === 'string') {
+      let foundConfig = false;
+      
+      snapshot.forEach((docSnap) => {
+        if (docSnap.id === "config_fornecedores") {
+          foundConfig = true;
+          const data = docSnap.data();
+          setCategoriasFornecedores(data.categorias || defaultCats);
+          setFornecedores(data.fornecedores || []);
+        } else {
+          const data = docSnap.data();
+          const normalizedPhotos = (data.fotos || []).map((p, idx) => {
+            if (typeof p === 'string') {
+              return {
+                id: p,
+                url_storage: p,
+                name: `Foto ${idx + 1}`,
+                selecionada: false,
+                destaque: false
+              };
+            }
             return {
-              id: p,
-              url_storage: p,
-              name: `Foto ${idx + 1}`,
-              selecionada: false,
-              destaque: false
+              id: p.id || p.url_storage || `photo_${idx}`,
+              url_storage: p.url_storage || p.url || '',
+              name: p.name || `Foto ${idx + 1}`,
+              selecionada: !!p.selecionada,
+              destaque: !!p.destaque
             };
-          }
-          return {
-            id: p.id || p.url_storage || `photo_${idx}`,
-            url_storage: p.url_storage || p.url || '',
-            name: p.name || `Foto ${idx + 1}`,
-            selecionada: !!p.selecionada,
-            destaque: !!p.destaque
-          };
-        });
-        docs.push({ id: doc.id, ...data, fotos: normalizedPhotos });
+          });
+          docs.push({ id: docSnap.id, ...data, fotos: normalizedPhotos });
+        }
       });
+
+      // Auto-inicializar se config_fornecedores não for encontrado
+      if (!foundConfig && db) {
+        console.log("[FIREBASE] Inicializando documento config_fornecedores no Firestore...");
+        setDoc(doc(db, "eventos", "config_fornecedores"), {
+          categorias: defaultCats,
+          fornecedores: []
+        }).catch(err => console.error("[FIREBASE] Erro ao criar config_fornecedores:", err));
+
+        setCategoriasFornecedores(defaultCats);
+        setFornecedores([]);
+      }
+
       setEventos(docs);
       checkAllLoaded('eventos');
     }, (error) => {
@@ -266,6 +320,26 @@ export default function App() {
     window.addEventListener('popstate', handleUrlRoute);
     return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
+
+  // Sincroniza activeClient com sessionStorage de acordo com a galeria ativa
+  useEffect(() => {
+    if (selectedGalleryToken && eventos.length > 0) {
+      const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
+      if (matchedEvent) {
+        const savedClientId = sessionStorage.getItem(`active_client_${matchedEvent.id}`);
+        if (savedClientId) {
+          const foundClient = clientes.find(c => c.id === savedClientId);
+          if (foundClient) {
+            setActiveClient(foundClient);
+            return;
+          }
+        }
+      }
+    }
+    setActiveClient(null);
+  }, [selectedGalleryToken, eventos, clientes]);
+
+
 
   // Controla contagem de visualizações do evento para estimativa de banda de tráfego
   useEffect(() => {
@@ -431,104 +505,311 @@ export default function App() {
   };
 
   // Toggles de seleção na galeria do cliente
-  const handleToggleSelection = (eventId, photoId, isSelected) => {
+  const handleToggleSelection = (eventId, photoId, isSelected, clientId) => {
+    if (!clientId) return;
     const targetEvent = eventos.find(e => e.id === eventId);
     if (!targetEvent) return;
 
-    const updatedPhotos = (targetEvent.fotos || []).map((photo) =>
-      photo.id === photoId ? { ...photo, selecionada: isSelected } : photo
-    );
+    const eventSelections = targetEvent.selecoes_clientes || {};
+    const clientSelection = eventSelections[clientId] || {
+      fotos_selecionadas: [],
+      status: 'em_progresso',
+      data_finalizacao: null
+    };
+
+    let currentSelected = clientSelection.fotos_selecionadas || [];
+    let updatedSelected = [];
+    if (isSelected) {
+      if (!currentSelected.includes(photoId)) {
+        updatedSelected = [...currentSelected, photoId];
+      } else {
+        updatedSelected = currentSelected;
+      }
+    } else {
+      updatedSelected = currentSelected.filter(id => id !== photoId);
+    }
+
+    const updatedClientSelection = {
+      ...clientSelection,
+      fotos_selecionadas: updatedSelected,
+      status: clientSelection.status || 'em_progresso',
+      data_finalizacao: clientSelection.data_finalizacao || null
+    };
 
     if (db) {
-      updateDoc(doc(db, "eventos", eventId), { fotos: updatedPhotos })
-        .then(() => console.log("[FIREBASE] Seleção de foto atualizada:", photoId))
-        .catch(err => console.error("[FIREBASE] Erro ao atualizar seleção de foto:", err));
+      updateDoc(doc(db, "eventos", eventId), {
+        [`selecoes_clientes.${clientId}`]: updatedClientSelection
+      })
+        .then(() => console.log("[FIREBASE] Seleção individual atualizada para o cliente:", clientId))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar seleção:", err));
     } else {
-      setEventos((prevEventos) =>
-        prevEventos.map((evt) => {
-          if (evt.id === eventId) {
-            return {
-              ...evt,
-              fotos: updatedPhotos
-            };
-          }
-          return evt;
-        })
-      );
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            selecoes_clientes: {
+              ...(e.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        }
+        return e;
+      }));
     }
   };
 
-  // Finalizar evento
-  const handleFinalizeEvent = (eventId) => {
+  // Finalizar evento / seleção
+  const handleFinalizeEvent = (eventId, clientId) => {
+    if (!clientId) return;
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const eventSelections = targetEvent.selecoes_clientes || {};
+    const clientSelection = eventSelections[clientId] || {
+      fotos_selecionadas: [],
+      status: 'em_progresso',
+      data_finalizacao: null
+    };
+    const dateStr = new Date().toISOString();
+
+    const updatedClientSelection = {
+      ...clientSelection,
+      status: "finalizada",
+      data_finalizacao: dateStr
+    };
+
     if (db) {
-      const targetEvent = eventos.find((e) => e.id === eventId);
-      if (targetEvent) {
-        updateDoc(doc(db, "eventos", eventId), { status: "finalizada" })
-          .then(() => {
-            console.log("[FIREBASE] Evento finalizado:", eventId);
-            const client = clientes.find((c) => c.id === targetEvent.id_cliente);
-            if (client) {
-              const selectedPhotos = (targetEvent.fotos || []).filter((f) => f.selecionada).length;
-              const totalPhotos = (targetEvent.fotos || []).length;
-
-              sendSelectionFinalizedEmails({
-                clientName: client.nome,
-                clientEmail: client.email,
-                galleryTitle: targetEvent.titulo,
-                selectedCount: selectedPhotos,
-                totalCount: totalPhotos
-              }).then((res) => {
-                console.log(`[EMAIL] Notificações de finalização enviadas.`);
-              });
-            }
-          })
-          .catch((err) => console.error("[FIREBASE] Erro ao finalizar evento:", err));
-      }
-    } else {
-      setEventos((prevEventos) => {
-        const updated = prevEventos.map((evt) =>
-          evt.id === eventId ? { ...evt, status: 'finalizada' } : evt
-        );
-
-        const targetEvent = updated.find((e) => e.id === eventId);
-        if (targetEvent) {
-          const client = clientes.find((c) => c.id === targetEvent.id_cliente);
-          if (client) {
-            const selectedPhotos = (targetEvent.fotos || []).filter((f) => f.selecionada).length;
-            const totalPhotos = (targetEvent.fotos || []).length;
+      updateDoc(doc(db, "eventos", eventId), {
+        [`selecoes_clientes.${clientId}`]: updatedClientSelection
+      })
+        .then(() => {
+          console.log("[FIREBASE] Seleção finalizada para o cliente:", clientId);
+          const client = clientes.find((c) => c.id === clientId);
+          if (client && targetEvent) {
+            const selectedCount = updatedClientSelection.fotos_selecionadas.length;
+            const totalCount = (targetEvent.fotos || []).length;
 
             sendSelectionFinalizedEmails({
               clientName: client.nome,
               clientEmail: client.email,
               galleryTitle: targetEvent.titulo,
-              selectedCount: selectedPhotos,
-              totalCount: totalPhotos
+              selectedCount: selectedCount,
+              totalCount: totalCount
             }).then((res) => {
-              console.log(`[EMAIL] Notificações de finalização enviadas.`);
+              console.log(`[EMAIL] Notificações de finalização enviadas para ${client.email}`);
             });
           }
+        })
+        .catch((err) => console.error("[FIREBASE] Erro ao finalizar seleção:", err));
+    } else {
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            selecoes_clientes: {
+              ...(e.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
         }
+        return e;
+      }));
 
-        return updated;
-      });
+      const client = clientes.find((c) => c.id === clientId);
+      if (client && targetEvent) {
+        const selectedCount = updatedClientSelection.fotos_selecionadas.length;
+        const totalCount = (targetEvent.fotos || []).length;
+        sendSelectionFinalizedEmails({
+          clientName: client.nome,
+          clientEmail: client.email,
+          galleryTitle: targetEvent.titulo,
+          selectedCount: selectedCount,
+          totalCount: totalCount
+        });
+      }
     }
-    console.log(`[EVENT] Evento ${eventId} finalizado e travado.`);
+    console.log(`[EVENT] Seleção do cliente ${clientId} finalizada e travada.`);
   };
 
-  // Reabrir evento
-  const handleReopenEvento = (eventId) => {
-    if (db) {
-      updateDoc(doc(db, "eventos", eventId), { status: "ativa" })
-        .then(() => console.log("[FIREBASE] Evento reaberto:", eventId))
-        .catch(err => console.error("[FIREBASE] Erro ao reabrir evento:", err));
+  // Reabrir evento / seleção
+  const handleReopenEvento = (eventId, clientId = null) => {
+    if (clientId) {
+      const targetEvent = eventos.find(e => e.id === eventId);
+      if (!targetEvent) return;
+
+      const eventSelections = targetEvent.selecoes_clientes || {};
+      const clientSelection = eventSelections[clientId] || {
+        fotos_selecionadas: [],
+        status: 'em_progresso',
+        data_finalizacao: null
+      };
+
+      const updatedClientSelection = {
+        ...clientSelection,
+        status: "em_progresso",
+        data_finalizacao: null
+      };
+
+      if (db) {
+        updateDoc(doc(db, "eventos", eventId), {
+          [`selecoes_clientes.${clientId}`]: updatedClientSelection
+        })
+          .then(() => console.log("[FIREBASE] Seleção reaberta para cliente:", clientId))
+          .catch(err => console.error("[FIREBASE] Erro ao reabrir seleção:", err));
+      } else {
+        setEventos(prev => prev.map(e => {
+          if (e.id === eventId) {
+            return {
+              ...e,
+              selecoes_clientes: {
+                ...(e.selecoes_clientes || {}),
+                [clientId]: updatedClientSelection
+              }
+            };
+          }
+          return e;
+        }));
+      }
     } else {
-      setEventos((prevEventos) =>
-        prevEventos.map((evt) =>
-          evt.id === eventId ? { ...evt, status: 'ativa' } : evt
-        )
-      );
+      if (db) {
+        updateDoc(doc(db, "eventos", eventId), { status: "ativa" })
+          .then(() => console.log("[FIREBASE] Evento reaberto globalmente:", eventId))
+          .catch(err => console.error("[FIREBASE] Erro ao reabrir evento:", err));
+      } else {
+        setEventos((prev) =>
+          prev.map(evt => evt.id === eventId ? { ...evt, status: 'ativa' } : evt)
+        );
+      }
     }
-    console.log(`[EVENT] Evento ${eventId} reaberto com sucesso.`);
+  };
+
+  // Vincular cliente à lista de clientes_permitidos do evento
+  const handleAssociateClientToEvent = (eventId, clientId) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+    const currentPermitted = targetEvent.clientes_permitidos || [];
+    if (!currentPermitted.includes(clientId)) {
+      const updatedPermitted = [...currentPermitted, clientId];
+      if (db) {
+        updateDoc(doc(db, "eventos", eventId), { clientes_permitidos: updatedPermitted })
+          .then(() => console.log("[FIREBASE] Cliente associado ao evento:", clientId))
+          .catch(err => console.error("[FIREBASE] Erro ao associar cliente ao evento:", err));
+      } else {
+        setEventos(prev => prev.map(e => e.id === eventId ? { ...e, clientes_permitidos: updatedPermitted } : e));
+      }
+    }
+  };
+
+  // Desvincular cliente da lista de clientes_permitidos do evento e remover a seleção correspondente
+  const handleUnassociateClient = (eventId, clientId) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const updatedPermitted = (targetEvent.clientes_permitidos || []).filter(id => id !== clientId);
+    const updatedIdCliente = targetEvent.id_cliente === clientId ? null : targetEvent.id_cliente;
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), {
+        clientes_permitidos: updatedPermitted,
+        id_cliente: updatedIdCliente,
+        [`selecoes_clientes.${clientId}`]: deleteField()
+      })
+        .then(() => console.log(`[FIREBASE] Cliente ${clientId} desvinculado do evento ${eventId}`))
+        .catch(err => console.error("[FIREBASE] Erro ao desvincular cliente:", err));
+    } else {
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          const updatedSelections = { ...(e.selecoes_clientes || {}) };
+          delete updatedSelections[clientId];
+          return {
+            ...e,
+            clientes_permitidos: updatedPermitted,
+            id_cliente: updatedIdCliente,
+            selecoes_clientes: updatedSelections
+          };
+        }
+        return e;
+      }));
+    }
+  };
+
+  // Atualizar o limite de fotos individual de um cliente na coleção de seleções
+  const handleUpdateClientSelectionLimit = (eventId, clientId, limit) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const eventSelections = targetEvent.selecoes_clientes || {};
+    const clientSelection = eventSelections[clientId] || {
+      fotos_selecionadas: [],
+      status: 'em_progresso',
+      data_finalizacao: null
+    };
+    const numericLimit = limit === '' || limit === null ? null : parseInt(limit, 10);
+
+    const updatedClientSelection = {
+      ...clientSelection,
+      limite_fotos: numericLimit
+    };
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), {
+        [`selecoes_clientes.${clientId}`]: updatedClientSelection
+      })
+        .then(() => console.log(`[FIREBASE] Limite de fotos atualizado para o cliente ${clientId}`))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar limite:", err));
+    } else {
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            selecoes_clientes: {
+              ...(e.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        }
+        return e;
+      }));
+    }
+  };
+
+  // Atualizar a permissão de fotos extras individual de um cliente na coleção de seleções
+  const handleUpdateClientSelectionExtras = (eventId, clientId, permitirExtrasVal) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const eventSelections = targetEvent.selecoes_clientes || {};
+    const clientSelection = eventSelections[clientId] || {
+      fotos_selecionadas: [],
+      status: 'em_progresso',
+      data_finalizacao: null
+    };
+
+    const updatedClientSelection = {
+      ...clientSelection,
+      permitir_extras: permitirExtrasVal
+    };
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), {
+        [`selecoes_clientes.${clientId}`]: updatedClientSelection
+      })
+        .then(() => console.log(`[FIREBASE] Fotos extras atualizadas para o cliente ${clientId}:`, permitirExtrasVal))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar permitir_extras:", err));
+    } else {
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            selecoes_clientes: {
+              ...(e.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        }
+        return e;
+      }));
+    }
   };
 
   // Confirmar pagamento das fotos extras
@@ -766,6 +1047,79 @@ export default function App() {
     }
   };
 
+  // Salvar/Editar texto explicativo da Categoria
+  const handleSaveCategoryExplanation = async (categoryId, explanationText) => {
+    console.log("[FIREBASE] Salvando explicação da categoria:", categoryId);
+    const updatedCats = categoriasFornecedores.map(c => {
+      if (c.id === categoryId) {
+        return { ...c, explicacao: explanationText };
+      }
+      return c;
+    });
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: updatedCats,
+        fornecedores: fornecedores
+      }, { merge: true });
+    } else {
+      setCategoriasFornecedores(updatedCats);
+    }
+  };
+
+  // Cadastrar/Adicionar Fornecedor
+  const handleAddVendor = async (vendorData) => {
+    const newVendor = {
+      id: `forn_${Date.now()}`,
+      ...vendorData
+    };
+    console.log("[FIREBASE] Cadastrando novo fornecedor:", newVendor.nome);
+    const updatedFornecedores = [...fornecedores, newVendor];
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: categoriasFornecedores,
+        fornecedores: updatedFornecedores
+      }, { merge: true });
+    } else {
+      setFornecedores(updatedFornecedores);
+    }
+  };
+
+  // Editar/Atualizar Fornecedor
+  const handleUpdateVendor = async (vendorId, vendorData) => {
+    console.log("[FIREBASE] Atualizando fornecedor:", vendorId);
+    const updatedVendor = {
+      id: vendorId,
+      ...vendorData
+    };
+    const updatedFornecedores = fornecedores.map(f => f.id === vendorId ? updatedVendor : f);
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: categoriasFornecedores,
+        fornecedores: updatedFornecedores
+      }, { merge: true });
+    } else {
+      setFornecedores(updatedFornecedores);
+    }
+  };
+
+  // Excluir/Deletar Fornecedor
+  const handleDeleteVendor = async (vendorId) => {
+    console.log("[FIREBASE] Excluindo fornecedor:", vendorId);
+    const updatedFornecedores = fornecedores.filter(f => f.id !== vendorId);
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: categoriasFornecedores,
+        fornecedores: updatedFornecedores
+      }, { merge: true });
+    } else {
+      setFornecedores(updatedFornecedores);
+    }
+  };
+
   // Callback para salvar dados de Contato
   const handleSaveContato = async (contatoData) => {
     console.log("[FIREBASE] Salvando informações de contato:", contatoData);
@@ -958,30 +1312,118 @@ export default function App() {
       );
     }
 
-    // Portão de segurança: se a galeria exige login e o cliente ainda não se autenticou nesta sessão
-    if (matchedEvent.acesso_restrito && !authenticatedGalleries[matchedEvent.id]) {
+    // Carregar identificação do sessionStorage se o estado estiver nulo
+    const savedClientId = sessionStorage.getItem(`active_client_${matchedEvent.id}`);
+    let currentClient = activeClient;
+    if (!currentClient && savedClientId) {
+      const foundClient = clientes.find(c => c.id === savedClientId);
+      if (foundClient) {
+        currentClient = foundClient;
+      }
+    }
+
+    // Se o cliente ainda não se identificou para esta galeria, exibimos a tela de identificação/auto-cadastro
+    if (!currentClient) {
       return (
-        <ClientLoginForm
+        <ClientAccessPortal
           event={matchedEvent}
           clientes={clientes}
-          onLoginSuccess={() => setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }))}
+          onAccessSuccess={(client) => {
+            setActiveClient(client);
+            sessionStorage.setItem(`active_client_${matchedEvent.id}`, client.id);
+            if (matchedEvent.acesso_restrito) {
+              setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
+            }
+          }}
           onBack={handleBackToWorkspace}
+          onAddCliente={handleAddCliente}
+          onAssociateClientToEvent={handleAssociateClientToEvent}
         />
       );
     }
 
-    return (
-      <div className="min-h-screen flex flex-col">
+    // Portão de segurança extra: se for acesso restrito e por algum motivo não estiver autenticado na sessão
+    if (matchedEvent.acesso_restrito && !authenticatedGalleries[matchedEvent.id]) {
+      return (
+        <ClientAccessPortal
+          event={matchedEvent}
+          clientes={clientes}
+          onAccessSuccess={(client) => {
+            setActiveClient(client);
+            sessionStorage.setItem(`active_client_${matchedEvent.id}`, client.id);
+            setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
+          }}
+          onBack={handleBackToWorkspace}
+          onAddCliente={handleAddCliente}
+          onAssociateClientToEvent={handleAssociateClientToEvent}
+        />
+      );
+    }
 
-        
-        <div className="flex-grow">
+    // Buscar a seleção deste cliente para este evento
+    const selectionId = `${matchedEvent.id}_${currentClient.id}`;
+    const activeSelection = selecoes.find(s => s.id === selectionId);
+    const selectedPhotoIds = activeSelection ? (activeSelection.fotos_selecionadas || []) : [];
+
+    // Mesclar a propriedade selecionada para cada foto a partir das escolhas deste cliente específico
+    const photosWithClientSelection = (matchedEvent.fotos || []).map((p, idx) => {
+      let photoObj = typeof p === 'string' ? {
+        id: p,
+        url_storage: p,
+        name: `Foto ${idx + 1}`,
+        destaque: false
+      } : {
+        id: p.id || p.url_storage || `photo_${idx}`,
+        url_storage: p.url_storage || p.url || '',
+        name: p.name || `Foto ${idx + 1}`,
+        destaque: !!p.destaque
+      };
+      return {
+        ...photoObj,
+        selecionada: selectedPhotoIds.includes(photoObj.id)
+      };
+    });
+
+    const isFinalized = activeSelection && activeSelection.status === 'finalizada';
+    const effectiveLimit = (activeSelection && activeSelection.limite_fotos !== undefined && activeSelection.limite_fotos !== null)
+      ? activeSelection.limite_fotos
+      : matchedEvent.limite_fotos;
+
+    const effectivePermitirExtras = (activeSelection && activeSelection.permitir_extras !== undefined && activeSelection.permitir_extras !== null)
+      ? activeSelection.permitir_extras
+      : matchedEvent.permitir_extras;
+
+    console.log("[DEBUG CLIENT LIMIT]", {
+      selectionId,
+      activeSelectionExists: !!activeSelection,
+      activeSelectionLimit: activeSelection?.limite_fotos,
+      eventLimit: matchedEvent.limite_fotos,
+      effectiveLimit,
+      effectivePermitirExtras
+    });
+
+    return (
+      <div className="h-screen overflow-hidden flex flex-col bg-[#FAF9F6]">
+        <div className="flex bg-stone-100 border-b border-stone-200 px-6 py-2 flex items-center justify-between text-xs text-stone-500 font-sans flex-shrink-0">
+          <span>Identificado como: <strong className="text-stone-850">{currentClient.nome}</strong> ({currentClient.email})</span>
+          <button 
+            onClick={() => {
+              setActiveClient(null);
+              sessionStorage.removeItem(`active_client_${matchedEvent.id}`);
+            }} 
+            className="underline hover:text-stone-900 font-bold uppercase tracking-wider text-[9px]"
+          >
+            [ Trocar de Cliente / Sair ]
+          </button>
+        </div>
+        <div className="flex-grow flex flex-col min-h-0 relative">
           <PhotoVirtualGrid
-            key={`${matchedEvent.id}_${(matchedEvent.fotos || []).length}_${matchedEvent.status}`} // Força re-renderização/montagem se mudar fotos ou status
+            key={`${matchedEvent.id}_${currentClient.id}_${photosWithClientSelection.length}_${isFinalized ? 'finalizada' : 'ativa'}_lim_${effectiveLimit}_ext_${effectivePermitirExtras}`}
             eventId={matchedEvent.id}
-            initialPhotos={matchedEvent.fotos || []}
-            limiteFotos={matchedEvent.limite_fotos}
-            statusEvento={matchedEvent.status}
-            permitirExtras={matchedEvent.permitir_extras}
+            initialPhotos={photosWithClientSelection}
+            limiteFotos={effectiveLimit}
+            statusEvento={isFinalized ? 'finalizada' : matchedEvent.status}
+            permitirExtras={effectivePermitirExtras}
             selecaoLivre={matchedEvent.selecao_livre}
             valorFotoExtra={matchedEvent.valor_foto_extra}
             marcaDaguaAtiva={matchedEvent.marca_dagua_ativa}
@@ -995,10 +1437,10 @@ export default function App() {
             pagamentoExtrasConfirmado={matchedEvent.pagamento_extras_confirmado}
             tituloEvent={matchedEvent.titulo}
             dataEvent={matchedEvent.data}
-            onToggleSelection={(photoId, isSelected) => handleToggleSelection(matchedEvent.id, photoId, isSelected)}
-            onFinalizeEvent={handleFinalizeEvent}
+            onToggleSelection={(photoId, isSelected) => handleToggleSelection(matchedEvent.id, photoId, isSelected, currentClient.id)}
+            onFinalizeEvent={(eventId) => handleFinalizeEvent(eventId, currentClient.id)}
             isDemo={!matchedEvent.fotos || matchedEvent.fotos.length === 0}
-            isAdmin={true}
+            isAdmin={false}
           />
         </div>
       </div>
@@ -1082,6 +1524,22 @@ export default function App() {
               }`}
             >
               Blog
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('fornecedores');
+                setSelectedGalleryToken(null);
+                setLightboxIndex(null);
+                setSelectedWeddingId(null);
+                setSelectedBlogPostId(null);
+              }}
+              className={`flex-grow sm:flex-grow-0 text-center px-1.5 sm:px-2.5 py-1.5 sm:py-1 rounded text-[7.5px] sm:text-[9px] font-bold uppercase tracking-widest transition-all ${
+                activeTab === 'fornecedores'
+                  ? 'bg-stone-900 text-white shadow-xs'
+                  : 'text-stone-400 hover:text-stone-700'
+              }`}
+            >
+              Fornecedores
             </button>
             <button
               onClick={() => {
@@ -1535,6 +1993,158 @@ export default function App() {
           </div>
         )}
 
+        {/* Aba 1.4: Guia de Fornecedores (Público) */}
+        {activeTab === 'fornecedores' && (
+          <div className="flex-grow flex flex-col space-y-8 animate-fade-in pb-12">
+            {/* Header */}
+            <div className="text-center py-6">
+              <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400 font-sans">Arsenal de Recomendações</span>
+              <h2 className="font-serif-editorial text-3xl sm:text-5xl text-stone-900 font-light tracking-wide mt-1">Guia de Fornecedores</h2>
+              <p className="text-xs text-stone-450 mt-2 uppercase tracking-wider font-semibold">Dicas essenciais e os melhores parceiros da cidade para realizar seu sonho</p>
+            </div>
+
+            {/* Categoria Selector */}
+            {(() => {
+              const catsList = categoriasFornecedores.length > 0 ? categoriasFornecedores : [
+                { id: 'aliancas', nome: 'Alianças' },
+                { id: 'buffet', nome: 'Buffet' },
+                { id: 'local', nome: 'Espaço / Local' },
+                { id: 'decoracao', nome: 'Decoração' },
+                { id: 'vestido', nome: 'Vestido de Noiva' },
+                { id: 'cerimonial', nome: 'Cerimonial' },
+                { id: 'musica', nome: 'DJ & Banda' },
+                { id: 'foto_video', nome: 'Foto & Vídeo' }
+              ];
+              return (
+                <>
+                  <div className="flex justify-center border-b border-stone-200 pb-3">
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                      {catsList.map((cat) => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setSelectedVendorCategory(cat.id)}
+                          className={`px-3.5 py-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
+                            selectedVendorCategory === cat.id
+                              ? 'bg-stone-900 text-white shadow-sm'
+                              : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'
+                          }`}
+                        >
+                          {cat.nome}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dicas / Explicação Card */}
+                  {(() => {
+                    const activeCat = catsList.find(c => c.id === selectedVendorCategory);
+                    const explanation = activeCat?.explicacao || 'Carregando dicas de planejamento...';
+                    return (
+                      <div className="max-w-3xl mx-auto w-full bg-white border border-stone-200/60 p-6 sm:p-8 rounded-xl shadow-xs space-y-4">
+                        <div className="flex items-center gap-2 text-stone-450 border-b border-stone-100 pb-3">
+                          <span className="text-[9px] font-extrabold tracking-widest uppercase font-sans">Como Escolher & Planejar</span>
+                          <span className="text-stone-300">•</span>
+                          <span className="font-serif-editorial italic text-xs capitalize text-stone-600">{activeCat?.nome || selectedVendorCategory}</span>
+                        </div>
+                        <p className="text-stone-750 font-sans text-xs sm:text-sm leading-relaxed whitespace-pre-line font-light">
+                          {explanation}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Fornecedores Recomendados List */}
+                  <div className="space-y-6 max-w-4xl mx-auto w-full">
+                    <div className="text-center sm:text-left border-b border-stone-200 pb-2">
+                      <h3 className="font-serif-editorial text-xl sm:text-2xl text-stone-900 font-light tracking-wide">
+                        Fornecedores Recomendados
+                      </h3>
+                    </div>
+
+                    {(() => {
+                      const filteredVendors = fornecedores.filter(f => f.categoriaId === selectedVendorCategory);
+                      if (filteredVendors.length === 0) {
+                        return (
+                          <div className="text-center py-16 border border-dashed border-stone-200 rounded-xl bg-stone-50/50 text-stone-450 font-serif-editorial">
+                            <p className="text-sm">Nenhum fornecedor cadastrado nesta categoria ainda.</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                          {filteredVendors.map((vendor) => (
+                            <div 
+                              key={vendor.id}
+                              className="bg-white border border-stone-200 rounded-xl p-6 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md transition-all duration-300"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-serif-editorial text-lg text-stone-900 font-medium tracking-wide">
+                                    {vendor.nome}
+                                  </h4>
+                                  {vendor.destaque && (
+                                    <span className="text-[8px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded">
+                                      ★ Recomendado
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[9px] font-mono tracking-widest text-stone-400 block uppercase">
+                                  Cidade: {vendor.cidade || 'Não informada'}
+                                </span>
+                                <p className="text-stone-550 text-xs leading-relaxed font-light whitespace-pre-line">
+                                  {vendor.descricao}
+                                </p>
+                              </div>
+
+                              <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500 font-sans">
+                                <div className="flex flex-col">
+                                  <span className="text-[9px] uppercase tracking-wider text-stone-400 font-bold">Contato</span>
+                                  <span className="font-mono text-stone-850 font-medium text-[11px] mt-0.5">{vendor.contato}</span>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  {vendor.link_instagram && (
+                                    <a 
+                                      href={vendor.link_instagram.startsWith('http') ? vendor.link_instagram : `https://instagram.com/${vendor.link_instagram.replace('@', '')}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="w-7 h-7 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full flex items-center justify-center transition-all"
+                                      title="Instagram"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37zM17.5 6.5h.01" />
+                                      </svg>
+                                    </a>
+                                  )}
+                                  {vendor.link_web && (
+                                    <a 
+                                      href={vendor.link_web.startsWith('http') ? vendor.link_web : `https://${vendor.link_web}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="w-7 h-7 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full flex items-center justify-center transition-all"
+                                      title="Website"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
+                                      </svg>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Aba 2: Admin Dashboard */}
         {activeTab === 'admin' && (
           !isAdminAuthenticated ? (
@@ -1598,12 +2208,14 @@ export default function App() {
             <AdminDashboard
               clientes={clientes}
               eventos={eventos}
+              selecoes={selecoes}
               portfolio={portfolio}
               realWeddings={realWeddings}
               blogPosts={blogPosts}
               onAddCliente={handleAddCliente}
               onAddEvento={handleAddEvento}
               onUpdateEvento={handleUpdateEvento}
+              onAssociateClientToEvent={handleAssociateClientToEvent}
               onSelectEventUpload={triggerEventUpload}
               onSelectEventView={triggerEventView}
               onConfirmPayment={handleConfirmPayment}
@@ -1620,10 +2232,19 @@ export default function App() {
               onAddBlogPost={handleAddBlogPost}
               onDeleteBlogPost={handleDeleteBlogPost}
               onSetPortfolioBanner={handleSetPortfolioBanner}
+              onUnassociateClient={handleUnassociateClient}
+              onUpdateClientSelectionLimit={handleUpdateClientSelectionLimit}
+              onUpdateClientSelectionExtras={handleUpdateClientSelectionExtras}
               contato={contato}
               onSaveContato={handleSaveContato}
               templateMensagem={templateMensagem}
               onSaveTemplateMensagem={handleSaveTemplateMensagem}
+              categoriasFornecedores={categoriasFornecedores}
+              fornecedores={fornecedores}
+              onSaveCategoryExplanation={handleSaveCategoryExplanation}
+              onAddVendor={handleAddVendor}
+              onUpdateVendor={handleUpdateVendor}
+              onDeleteVendor={handleDeleteVendor}
             />
           )
         )}
@@ -1852,27 +2473,97 @@ export default function App() {
   );
 }
 
-function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
+function ClientAccessPortal({ event, clientes, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [step, setStep] = useState('email'); // 'email' | 'password' | 'register'
+  const [matchedClient, setMatchedClient] = useState(null);
   const [error, setError] = useState('');
 
-  const client = clientes.find((c) => c.id === event.id_cliente);
-
-  const handleSubmit = (e) => {
+  const handleEmailSubmit = (e) => {
     e.preventDefault();
-    if (!client) {
-      setError('Cliente não cadastrado ou não encontrado.');
+    setError('');
+    
+    if (!email.trim()) return;
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const foundClient = clientes.find((c) => c.email.trim().toLowerCase() === trimmedEmail);
+
+    if (foundClient) {
+      setMatchedClient(foundClient);
+      const isPermitted = (event.clientes_permitidos || []).includes(foundClient.id) || event.id_cliente === foundClient.id;
+      
+      // Se já está associado ou se a galeria permite auto-cadastro (o que significa que podemos apenas associá-lo se for existente)
+      if (isPermitted || event.permitir_auto_cadastro) {
+        // Se a associação não existia, cria agora
+        if (!isPermitted) {
+          onAssociateClientToEvent(event.id, foundClient.id);
+        }
+
+        if (event.acesso_restrito) {
+          setStep('password');
+        } else {
+          onAccessSuccess(foundClient);
+        }
+      } else {
+        setError('Este e-mail não tem permissão para acessar esta galeria. Solicite acesso ao fotógrafo.');
+      }
+    } else {
+      // Cliente não encontrado
+      if (event.permitir_auto_cadastro) {
+        setStep('register');
+      } else {
+        setError('E-mail não cadastrado para esta galeria. Entre em contato com o fotógrafo.');
+      }
+    }
+  };
+
+  const handleRegisterSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!name.trim() || !phone.trim()) {
+      setError('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    const emailMatch = client.email.trim().toLowerCase() === email.trim().toLowerCase();
-    const passwordMatch = String(client.senha || '').trim() === String(password || '').trim();
+    if (event.acesso_restrito && !password.trim()) {
+      setError('Por favor, defina uma senha de acesso.');
+      return;
+    }
 
-    if (emailMatch && passwordMatch) {
-      onLoginSuccess();
+    // Criar novo cliente
+    const newClient = onAddCliente({
+      nome: name.trim(),
+      email: email.trim().toLowerCase(),
+      telefone: phone.trim(),
+      senha: event.acesso_restrito ? password.trim() : ''
+    });
+
+    if (newClient && newClient.id) {
+      // Associar ao evento
+      onAssociateClientToEvent(event.id, newClient.id);
+      // Fazer login
+      onAccessSuccess(newClient);
     } else {
-      setError('E-mail ou senha de acesso incorretos.');
+      setError('Erro ao realizar o cadastro. Tente novamente.');
+    }
+  };
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!matchedClient) return;
+
+    const passwordMatch = String(matchedClient.senha || '').trim() === String(password || '').trim();
+
+    if (passwordMatch) {
+      onAccessSuccess(matchedClient);
+    } else {
+      setError('Senha de acesso incorreta.');
     }
   };
 
@@ -1880,9 +2571,9 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col justify-between text-stone-900 font-sans selection:bg-stone-200">
       {/* Top Header Mode indicator */}
       <div className="bg-stone-100 border-b border-stone-200 px-8 py-2 flex items-center justify-between text-xs text-stone-500">
-        <span>Acesso Restrito &bull; Identifique-se para continuar</span>
+        <span>Acesso à Galeria &bull; Identifique-se para continuar</span>
         <button onClick={onBack} className="underline hover:text-stone-900 font-bold uppercase tracking-wider text-[10px]">
-          [ Voltar para Painel Admin ]
+          [ Voltar para Portfólio ]
         </button>
       </div>
 
@@ -1894,25 +2585,26 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
             <span className="relative z-10 font-serif-editorial text-sm tracking-widest text-white uppercase">{event.titulo}</span>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-5">
-            <div className="text-center mb-6">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Identificação Requerida</span>
-              <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Acessar Galeria</h3>
-              <p className="text-xs text-stone-400 mt-2 leading-relaxed">
-                Esta galeria é restrita. Faça login usando seu e-mail cadastrado e a senha de acesso.
-              </p>
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-600 animate-pulse text-center">
-                {error}
+          {/* Passo 1: Inserir E-mail */}
+          {step === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="p-8 space-y-5">
+              <div className="text-center mb-6">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Acesso Restrito</span>
+                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Identifique-se</h3>
+                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
+                  Digite seu e-mail para visualizar a galeria e iniciar a seleção das fotos.
+                </p>
               </div>
-            )}
 
-            <div className="space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                  E-mail do Cliente
+                  E-mail de Acesso
                 </label>
                 <input
                   type="email"
@@ -1924,6 +2616,32 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
                 />
               </div>
 
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all mt-3 shadow"
+              >
+                Continuar →
+              </button>
+            </form>
+          )}
+
+          {/* Passo 2: Inserir Senha */}
+          {step === 'password' && (
+            <form onSubmit={handlePasswordSubmit} className="p-8 space-y-5">
+              <div className="text-center mb-6">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Senha Requerida</span>
+                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Galeria Restrita</h3>
+                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
+                  Olá, <strong>{matchedClient?.nome}</strong>. Esta galeria exige uma senha de segurança para acesso.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
                   Senha de Acesso
@@ -1934,18 +2652,120 @@ function ClientLoginForm({ event, clientes, onLoginSuccess, onBack }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Digite sua senha"
-                  className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
+                  className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20 animate-reveal"
                 />
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all mt-3 shadow"
-            >
-              Entrar na Galeria
-            </button>
-          </form>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setStep('email'); setPassword(''); setError(''); }}
+                  className="w-1/3 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-550 rounded text-xs font-bold uppercase tracking-widest transition-all"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
+                >
+                  Acessar Galeria
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Passo 3: Auto-cadastro */}
+          {step === 'register' && (
+            <form onSubmit={handleRegisterSubmit} className="p-8 space-y-4">
+              <div className="text-center mb-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Novo Cadastro</span>
+                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Criar Acesso</h3>
+                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
+                  Seu e-mail não está cadastrado. Preencha seus dados rápidos para acessar e salvar sua seleção de fotos.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    disabled
+                    value={email}
+                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs bg-stone-100 text-stone-400 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    Nome Completo
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome"
+                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    Telefone / WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(99) 99999-9999"
+                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
+                  />
+                </div>
+
+                {event.acesso_restrito && (
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                      Definir Senha de Acesso
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Crie uma senha"
+                      className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2.5 pt-3">
+                <button
+                  type="button"
+                  onClick={() => { setStep('email'); setName(''); setPhone(''); setPassword(''); setError(''); }}
+                  className="w-1/3 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-550 rounded text-xs font-bold uppercase tracking-widest transition-all"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
+                >
+                  Cadastrar e Entrar
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 

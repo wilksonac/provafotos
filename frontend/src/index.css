@@ -21,18 +21,18 @@
 
 /* Custom slim scrollbar style for Pic-Time theme */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 8px;
+  height: 8px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: rgba(242, 240, 235, 0.5);
+  background: rgba(242, 240, 235, 0.6);
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(28, 25, 23, 0.15);
-  border-radius: 9999px;
+  background: rgba(28, 25, 23, 0.28);
+  border-radius: 4px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(28, 25, 23, 0.3);
+  background: rgba(28, 25, 23, 0.45);
 }
 
 /* Editorial Glassmorphism panels for light mode */

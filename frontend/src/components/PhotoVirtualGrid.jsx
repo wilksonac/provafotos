@@ -25,7 +25,8 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
     marcaDaguaTexto,
     marcaDaguaOpacidade,
     marcaDaguaMiniaturas,
-    marcaDaguaEstilo
+    marcaDaguaEstilo,
+    isMobile
   } = data;
   
   const index = rowIndex * columns + columnIndex;
@@ -33,8 +34,9 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
   if (index >= photos.length) return null;
   const photo = photos[index];
 
-  const paddingLeft = columnIndex === 0 ? 0 : gap / 2;
-  const paddingRight = columnIndex === columns - 1 ? 0 : gap / 2;
+  const sidePadding = isMobile ? 8 : 32;
+  const paddingLeft = columnIndex === 0 ? sidePadding : gap / 2;
+  const paddingRight = columnIndex === columns - 1 ? sidePadding : gap / 2;
   
   const adjustedStyle = {
     ...style,
@@ -216,6 +218,34 @@ export default function PhotoVirtualGrid({
     });
   });
 
+  // Sincronizar estado local de fotos quando a prop initialPhotos mudar no banco de dados
+  useEffect(() => {
+    if (isDemo && (!initialPhotos || initialPhotos.length === 0)) return;
+    setPhotos((prevPhotos) => {
+      return (initialPhotos || []).map((p, idx) => {
+        const photoObj = typeof p === 'string' ? {
+          id: p,
+          url_storage: p,
+          name: `Foto ${idx + 1}`,
+          selecionada: false,
+          destaque: false
+        } : {
+          id: p.id || p.url_storage || `photo_${idx}`,
+          url_storage: p.url_storage || p.url || '',
+          name: p.name || `Foto ${idx + 1}`,
+          selecionada: !!p.selecionada,
+          destaque: !!p.destaque
+        };
+        return photoObj;
+      });
+    });
+  }, [initialPhotos, isDemo]);
+
+  // Sincronizar statusEvento prop com currentStatus state
+  useEffect(() => {
+    setCurrentStatus(statusEvento);
+  }, [statusEvento]);
+
   const selectedCount = useMemo(() => {
     return photos.filter((p) => p.selecionada).length;
   }, [photos]);
@@ -288,6 +318,7 @@ export default function PhotoVirtualGrid({
 
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const isMobile = dimensions.width < 640;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -402,7 +433,8 @@ export default function PhotoVirtualGrid({
     marcaDaguaTexto,
     marcaDaguaOpacidade,
     marcaDaguaMiniaturas,
-    marcaDaguaEstilo
+    marcaDaguaEstilo,
+    isMobile
   }), [
     photos, 
     gridLayout.columns, 
@@ -414,7 +446,8 @@ export default function PhotoVirtualGrid({
     marcaDaguaTexto, 
     marcaDaguaOpacidade, 
     marcaDaguaMiniaturas,
-    marcaDaguaEstilo
+    marcaDaguaEstilo,
+    isMobile
   ]);
 
   const isLimitReached = !selecaoLivre && limiteFotos && selectedCount >= limiteFotos;
@@ -433,11 +466,14 @@ export default function PhotoVirtualGrid({
   const activeLightboxPhoto = activeLightboxIndex !== null ? photos[activeLightboxIndex] : null;
 
   // Cálculos dinâmicos para colapso do cabeçalho cinematográfico no scroll
-  const isMobile = dimensions.width < 640;
   const coverHeight = isShrunk ? 60 : (isMobile ? 180 : 320);
 
-  // Altura do grid virtualizada constante para evitar remontagem/recálculo no scroll
-  const gridHeight = dimensions.height - (isMobile ? 190 : 118);
+  // Altura do grid virtualizada calculada dinamicamente de acordo com o colapso do cabeçalho
+  // para evitar que o grid e sua barra de rolagem sejam empurrados para baixo da tela
+  const currentHeaderHeight = isShrunk 
+    ? (isMobile ? 138 : 118) 
+    : (isMobile ? 258 : 378);
+  const gridHeight = dimensions.height - currentHeaderHeight - (isMobile ? 12 : 24);
 
   return (
     <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans relative">
@@ -517,7 +553,7 @@ export default function PhotoVirtualGrid({
       {/* 3. Grid de Fotos Principal (Passa por baixo do cabeçalho fixo com padding-top suave) */}
       <div 
         ref={containerRef} 
-        className="flex-grow px-2 sm:px-8 pb-3 sm:pb-6 overflow-hidden bg-[#FAF9F6] transition-all duration-300 ease-in-out"
+        className="flex-grow pb-3 sm:pb-6 overflow-hidden bg-[#FAF9F6] transition-all duration-300 ease-in-out"
         style={{ 
           paddingTop: isShrunk 
             ? (isMobile ? '138px' : '118px') 

@@ -16,7 +16,9 @@ class TipoGaleria(str, Enum):
     outros = "outros"
 
 class EventoBase(BaseModel):
-    id_cliente: str = Field(..., description="Firestore document ID of the associated client")
+    id_cliente: Optional[str] = Field(None, description="Firestore document ID of the primary associated client (legacy/optional)")
+    clientes_permitidos: list[str] = Field(default_factory=list, description="List of client IDs allowed/associated to this gallery")
+    permitir_auto_cadastro: bool = Field(default=True, description="Whether anyone with the link can self-register as a client for this gallery")
     titulo: str = Field(..., min_length=2, max_length=150, description="Title of the event")
     data: date = Field(..., description="Date of the photoshoot event")
     limite_fotos: Optional[int] = Field(None, ge=1, description="Maximum number of photos the client can select")

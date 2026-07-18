@@ -4,7 +4,7 @@ import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
 import { db, auth, storage } from './lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion, deleteField } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion, deleteField, query, where, getDocs } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -103,6 +103,8 @@ export default function App() {
   const [selectedBlogPostId, setSelectedBlogPostId] = useState(null);
   const [selectedVendorCategory, setSelectedVendorCategory] = useState('aliancas');
   const [showAllPortfolio, setShowAllPortfolio] = useState(false);
+  const [magicEvent, setMagicEvent] = useState(null);
+  const [magicClient, setMagicClient] = useState(null);
   const [contato, setContato] = useState({
     telefone: '(11) 98888-7777',
     whatsapp: '5511988887777',
@@ -137,18 +139,16 @@ export default function App() {
     } catch (e) {}
   }, [authenticatedGalleries]);
 
-  // Sincronizar clientes, eventos e portfólio do Firestore em tempo real com controle de Loading inicial
+  // Sincronizar dados públicos do Firestore em tempo real com controle de Loading inicial leve
   useEffect(() => {
     if (!db) {
       setIsLoading(false);
       return;
     }
 
-    console.log("[FIREBASE] Ativando ouvintes em tempo real do Firestore...");
+    console.log("[FIREBASE] Ativando ouvintes públicos em tempo real...");
 
     let loadedCollections = {
-      clientes: false,
-      eventos: false,
       portfolio: false,
       realWeddings: false,
       blogPosts: false
@@ -160,18 +160,6 @@ export default function App() {
         setIsLoading(false);
       }
     };
-    
-    const unsubscribeClientes = onSnapshot(collection(db, "clientes"), (snapshot) => {
-      const docs = [];
-      snapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
-      });
-      setClientes(docs);
-      checkAllLoaded('clientes');
-    }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar clientes:", error);
-      checkAllLoaded('clientes'); // garante liberação do loading mesmo em erro
-    });
 
     const defaultCats = [
       { id: 'aliancas', nome: 'Alianças', explicacao: 'As alianças são o símbolo material da união. Ao escolher, considerem o conforto para o dia a dia, a qualidade do metal (geralmente ouro 18k) e o estilo que combine com a personalidade de ambos. É recomendável encomendar com pelo menos 3 meses de antecedência.' },
@@ -184,42 +172,12 @@ export default function App() {
       { id: 'foto_video', nome: 'Foto & Vídeo', explicacao: 'A fotografia e o vídeo são as lembranças eternas do seu dia. Analisem o portfólio completo dos profissionais para entender seu estilo (documental, posado, fine art). A sintonia pessoal com a equipe é essencial, pois eles estarão ao seu lado o dia todo.' }
     ];
 
-    const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
-      const docs = [];
-      let foundConfig = false;
-      
-      snapshot.forEach((docSnap) => {
-        if (docSnap.id === "config_fornecedores") {
-          foundConfig = true;
-          const data = docSnap.data();
-          setCategoriasFornecedores(data.categorias || defaultCats);
-          setFornecedores(data.fornecedores || []);
-        } else {
-          const data = docSnap.data();
-          const normalizedPhotos = (data.fotos || []).map((p, idx) => {
-            if (typeof p === 'string') {
-              return {
-                id: p,
-                url_storage: p,
-                name: `Foto ${idx + 1}`,
-                selecionada: false,
-                destaque: false
-              };
-            }
-            return {
-              id: p.id || p.url_storage || `photo_${idx}`,
-              url_storage: p.url_storage || p.url || '',
-              name: p.name || `Foto ${idx + 1}`,
-              selecionada: !!p.selecionada,
-              destaque: !!p.destaque
-            };
-          });
-          docs.push({ id: docSnap.id, ...data, fotos: normalizedPhotos });
-        }
-      });
-
-      // Auto-inicializar se config_fornecedores não for encontrado
-      if (!foundConfig && db) {
+    const unsubscribeFornecedoresDoc = onSnapshot(doc(db, "eventos", "config_fornecedores"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCategoriasFornecedores(data.categorias || defaultCats);
+        setFornecedores(data.fornecedores || []);
+      } else {
         console.log("[FIREBASE] Inicializando documento config_fornecedores no Firestore...");
         setDoc(doc(db, "eventos", "config_fornecedores"), {
           categorias: defaultCats,
@@ -229,12 +187,8 @@ export default function App() {
         setCategoriasFornecedores(defaultCats);
         setFornecedores([]);
       }
-
-      setEventos(docs);
-      checkAllLoaded('eventos');
     }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar eventos:", error);
-      checkAllLoaded('eventos');
+      console.error("[FIREBASE] Erro ao sincronizar config_fornecedores:", error);
     });
 
     const unsubscribePortfolio = onSnapshot(collection(db, "portfolio"), (snapshot) => {
@@ -290,8 +244,7 @@ export default function App() {
     });
 
     return () => {
-      unsubscribeClientes();
-      unsubscribeEventos();
+      unsubscribeFornecedoresDoc();
       unsubscribePortfolio();
       unsubscribeRealWeddings();
       unsubscribeBlogPosts();
@@ -321,71 +274,205 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
 
+  // Sincroniza Clientes e Eventos de forma "Lazy" apenas para Administradores
+  useEffect(() => {
+    if (!db || !isAdminAuthenticated) {
+      setClientes([]);
+      setEventos([]);
+      return;
+    }
+
+    console.log("[FIREBASE] Administrador autenticado: Iniciando carregamento completo de clientes e eventos...");
+
+    const unsubscribeClientes = onSnapshot(collection(db, "clientes"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setClientes(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar clientes para o admin:", error);
+    });
+
+    const defaultCats = [
+      { id: 'aliancas', nome: 'Alianças', explicacao: 'As alianças são o símbolo material da união. Ao escolher, considerem o conforto para o dia a dia, a qualidade do metal (geralmente ouro 18k) e o estilo que combine com a personalidade de ambos. É recomendável encomendar com pelo menos 3 meses de antecedência.' },
+      { id: 'buffet', nome: 'Buffet', explicacao: 'O buffet é um dos pilares do casamento. Avaliem o estilo do serviço (americano, franco-americano ou empratado) de acordo com o perfil dos convidados. Lembrem-se de realizar degustações completas e atentar para restrições alimentares (vegetarianos, intolerantes, etc.).' },
+      { id: 'local', nome: 'Espaço / Local', explicacao: 'A escolha do espaço define toda a logística do evento. Considerem a capacidade de convidados, plano B para casamentos ao ar livre (em caso de chuva), restrições de horário e ruído, e se a infraestrutura de banheiros e cozinha atende aos fornecedores contratados.' },
+      { id: 'decoracao', nome: 'Decoração', explicacao: 'A decoração expressa a identidade visual e o clima do casamento. Reúnam referências de paletas de cores e estilos (clássico, boho, rústico ou minimalista). Definam prioridades de destaque, como o altar e a mesa de doces.' },
+      { id: 'vestido', nome: 'Vestido de Noiva', explicacao: 'O vestido ideal é aquele que faz você se sentir confiante e confortável. Comecem a busca com 8 a 10 meses de antecedência. Considerem o local e o horário da cerimônia na escolha do tecido e corte.' },
+      { id: 'cerimonial', nome: 'Cerimonial', explicacao: 'O cerimonial é o anjo da guarda do casal. Eles organizam o cronograma, coordenam os fornecedores no dia e garantem que tudo corra perfeitamente. Contratar uma assessoria completa desde o início economiza tempo e previne surpresas.' },
+      { id: 'musica', nome: 'DJ & Banda', explicacao: 'A música dita a energia da festa. Escolham profissionais que saibam ler a pista e adaptar o repertório em tempo real. Alinhem previamente a lista de músicas indispensáveis e aquelas que não devem tocar de jeito nenhum.' },
+      { id: 'foto_video', nome: 'Foto & Vídeo', explicacao: 'A fotografia e o vídeo são as lembranças eternas do seu dia. Analisem o portfólio completo dos profissionais para entender seu estilo (documental, posado, fine art). A sintonia pessoal com a equipe é essencial, pois eles estarão ao seu lado o dia todo.' }
+    ];
+
+    const unsubscribeEventos = onSnapshot(collection(db, "eventos"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((docSnap) => {
+        if (docSnap.id !== "config_fornecedores") {
+          const data = docSnap.data();
+          const normalizedPhotos = (data.fotos || []).map((p, idx) => {
+            if (typeof p === 'string') {
+              return {
+                id: p,
+                url_storage: p,
+                name: `Foto ${idx + 1}`,
+                selecionada: false,
+                destaque: false
+              };
+            }
+            return {
+              id: p.id || p.url_storage || `photo_${idx}`,
+              url_storage: p.url_storage || p.url || '',
+              name: p.name || `Foto ${idx + 1}`,
+              selecionada: !!p.selecionada,
+              destaque: !!p.destaque
+            };
+          });
+          docs.push({ id: docSnap.id, ...data, fotos: normalizedPhotos });
+        }
+      });
+      setEventos(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar eventos para o admin:", error);
+    });
+
+    return () => {
+      unsubscribeClientes();
+      unsubscribeEventos();
+    };
+  }, [db, isAdminAuthenticated]);
+
   // Sincroniza activeClient com sessionStorage de acordo com a galeria ativa
   useEffect(() => {
-    if (selectedGalleryToken && eventos.length > 0) {
-      const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
-      if (matchedEvent) {
-        const savedClientId = sessionStorage.getItem(`active_client_${matchedEvent.id}`);
-        if (savedClientId) {
-          const foundClient = clientes.find(c => c.id === savedClientId);
-          if (foundClient) {
-            setActiveClient(foundClient);
-            return;
-          }
-        }
+    if (selectedGalleryToken && magicEvent) {
+      const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
+      if (savedClientId && magicClient) {
+        setActiveClient(magicClient);
+        return;
       }
     }
     setActiveClient(null);
-  }, [selectedGalleryToken, eventos, clientes]);
+  }, [selectedGalleryToken, magicEvent, magicClient]);
+  // Sincroniza dados da Galeria e Cliente ativos via Link Mágico (?gallery=token)
+  useEffect(() => {
+    if (!selectedGalleryToken || !db) {
+      setMagicEvent(null);
+      setMagicClient(null);
+      return;
+    }
 
+    console.log(`[FIREBASE] Buscando galeria do link mágico: ${selectedGalleryToken}`);
+    const q = query(collection(db, "eventos"), where("token", "==", selectedGalleryToken));
+    
+    const unsubscribeEvent = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const data = docSnap.data();
+        const normalizedPhotos = (data.fotos || []).map((p, idx) => {
+          if (typeof p === 'string') {
+            return {
+              id: p,
+              url_storage: p,
+              name: `Foto ${idx + 1}`,
+              selecionada: false,
+              destaque: false
+            };
+          }
+          return {
+            id: p.id || p.url_storage || `photo_${idx}`,
+            url_storage: p.url_storage || p.url || '',
+            name: p.name || `Foto ${idx + 1}`,
+            selecionada: !!p.selecionada,
+            destaque: !!p.destaque
+          };
+        });
+        
+        const eventObj = { id: docSnap.id, ...data, fotos: normalizedPhotos };
+        setMagicEvent(eventObj);
+      } else {
+        setMagicEvent(null);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar galeria mágica:", error);
+    });
 
+    return () => unsubscribeEvent();
+  }, [selectedGalleryToken, db]);
+
+  // Sincroniza o cliente da galeria ativa caso ele já tenha se identificado anteriormente
+  useEffect(() => {
+    if (!magicEvent || !db) {
+      setMagicClient(null);
+      return;
+    }
+
+    const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
+    const clientIdToFetch = savedClientId || magicEvent.id_cliente;
+
+    if (!clientIdToFetch) {
+      setMagicClient(null);
+      return;
+    }
+
+    console.log(`[FIREBASE] Buscando dados do cliente da galeria: ${clientIdToFetch}`);
+    const unsubscribeClient = onSnapshot(doc(db, "clientes", clientIdToFetch), (docSnap) => {
+      if (docSnap.exists()) {
+        setMagicClient({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        setMagicClient(null);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao carregar cliente da galeria:", error);
+    });
+
+    return () => unsubscribeClient();
+  }, [magicEvent, db]);
 
   // Controla contagem de visualizações do evento para estimativa de banda de tráfego
   useEffect(() => {
-    if (activeTab === 'magic-client' && selectedGalleryToken) {
-      const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
-      if (matchedEvent) {
-        // Se acesso for restrito, conta apenas quando estiver autenticado
-        const isAuth = !matchedEvent.acesso_restrito || authenticatedGalleries[matchedEvent.id];
-        if (isAuth) {
-          const viewedSessionKey = `viewed_${matchedEvent.id}`;
-          if (!sessionStorage.getItem(viewedSessionKey)) {
-            sessionStorage.setItem(viewedSessionKey, 'true');
-            if (db) {
-              const todayStr = new Date().toISOString().split('T')[0];
-              const currentViews = matchedEvent.views || 0;
-              let currentViewsDiarias = matchedEvent.views_diarias || 0;
-              if (matchedEvent.ultima_visualizacao_data !== todayStr) {
-                currentViewsDiarias = 0;
-              }
-              updateDoc(doc(db, "eventos", matchedEvent.id), { 
-                views: currentViews + 1,
-                views_diarias: currentViewsDiarias + 1,
-                ultima_visualizacao_data: todayStr
-              })
-                .then(() => console.log("[FIREBASE] Visualização diária incrementada:", matchedEvent.id))
-                .catch(err => console.error("[FIREBASE] Erro ao incrementar views:", err));
-            } else {
-              const todayStr = new Date().toISOString().split('T')[0];
-              setEventos(prev => prev.map(e => {
-                if (e.id === matchedEvent.id) {
-                  const isNewDay = e.ultima_visualizacao_data !== todayStr;
-                  return { 
-                    ...e, 
-                    views: (e.views || 0) + 1,
-                    views_diarias: isNewDay ? 1 : (e.views_diarias || 0) + 1,
-                    ultima_visualizacao_data: todayStr
-                  };
-                }
-                return e;
-              }));
+    if (activeTab === 'magic-client' && selectedGalleryToken && magicEvent) {
+      // Se acesso for restrito, conta apenas quando estiver autenticado
+      const isAuth = !magicEvent.acesso_restrito || authenticatedGalleries[magicEvent.id];
+      if (isAuth) {
+        const viewedSessionKey = `viewed_${magicEvent.id}`;
+        if (!sessionStorage.getItem(viewedSessionKey)) {
+          sessionStorage.setItem(viewedSessionKey, 'true');
+          if (db) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const currentViews = magicEvent.views || 0;
+            let currentViewsDiarias = magicEvent.views_diarias || 0;
+            if (magicEvent.ultima_visualizacao_data !== todayStr) {
+              currentViewsDiarias = 0;
             }
+            updateDoc(doc(db, "eventos", magicEvent.id), { 
+              views: currentViews + 1,
+              views_diarias: currentViewsDiarias + 1,
+              ultima_visualizacao_data: todayStr
+            })
+              .then(() => console.log("[FIREBASE] Visualização diária incrementada:", magicEvent.id))
+              .catch(err => console.error("[FIREBASE] Erro ao incrementar views:", err));
           }
         }
       }
     }
-  }, [activeTab, selectedGalleryToken, authenticatedGalleries, eventos]);
+  }, [activeTab, selectedGalleryToken, authenticatedGalleries, magicEvent, db]);
+
+  // Função auxiliar para verificar o e-mail de um cliente de forma lazy no Firestore
+  const handleCheckClientEmail = async (email) => {
+    if (!db) return null;
+    try {
+      console.log(`[FIREBASE] Verificando e-mail do cliente: ${email}`);
+      const q = query(collection(db, "clientes"), where("email", "==", email.trim().toLowerCase()));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+    } catch (err) {
+      console.error("[FIREBASE] Erro ao buscar e-mail de cliente:", err);
+    }
+    return null;
+  };
 
   // Handlers para Clientes (Retorna o cliente recém criado para vinculação síncrona inline)
   const handleAddCliente = (newClientData) => {
@@ -1189,36 +1276,87 @@ export default function App() {
   };
 
   // Autenticação geral na área do cliente (quando não usam link mágico)
-  const handleGeneralLogin = (e) => {
+  const handleGeneralLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
 
-    // Achar cliente pelo email e senha (com conversão segura para string e trim)
-    const client = clientes.find(
-      (c) => c.email.toLowerCase() === loginEmail.toLowerCase().trim() && 
-             String(c.senha || '').trim() === String(loginPassword || '').trim()
-    );
-
-    if (!client) {
-      setLoginError('E-mail ou senha incorretos.');
-      return;
+    try {
+      // 1. Procurar o cliente pelo e-mail usando uma query no Firestore
+      const clientQuery = query(
+        collection(db, "clientes"), 
+        where("email", "==", loginEmail.toLowerCase().trim())
+      );
+      const clientSnap = await getDocs(clientQuery);
+      
+      if (clientSnap.empty) {
+        setLoginError('E-mail ou senha incorretos.');
+        return;
+      }
+      
+      const clientDoc = clientSnap.docs[0];
+      const client = { id: clientDoc.id, ...clientDoc.data() };
+      
+      // 2. Verificar a senha
+      if (String(client.senha || '').trim() !== String(loginPassword || '').trim()) {
+        setLoginError('E-mail ou senha incorretos.');
+        return;
+      }
+      
+      // 3. Procurar a galeria vinculada a este cliente usando uma query no Firestore
+      const eventQuery = query(
+        collection(db, "eventos"),
+        where("id_cliente", "==", client.id)
+      );
+      const eventSnap = await getDocs(eventQuery);
+      
+      if (eventSnap.empty) {
+        setLoginError('Nenhuma galeria ativa vinculada a este cliente.');
+        return;
+      }
+      
+      const eventDoc = eventSnap.docs[0];
+      const matchedEvent = { id: eventDoc.id, ...eventDoc.data() };
+      
+      // 4. Autenticar e redirecionar
+      setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
+      
+      // Salva o ID do cliente logado no sessionStorage para persistência
+      sessionStorage.setItem(`active_client_${matchedEvent.id}`, client.id);
+      
+      // Preencher os estados locais de visualização mágica
+      setMagicEvent({
+        ...matchedEvent,
+        fotos: (matchedEvent.fotos || []).map((p, idx) => {
+          if (typeof p === 'string') {
+            return {
+              id: p,
+              url_storage: p,
+              name: `Foto ${idx + 1}`,
+              selecionada: false,
+              destaque: false
+            };
+          }
+          return {
+            id: p.id || p.url_storage || `photo_${idx}`,
+            url_storage: p.url_storage || p.url || '',
+            name: p.name || `Foto ${idx + 1}`,
+            selecionada: !!p.selecionada,
+            destaque: !!p.destaque
+          };
+        })
+      });
+      setMagicClient(client);
+      
+      setSelectedGalleryToken(matchedEvent.token);
+      setActiveTab('magic-client');
+      setShowClientLogin(false);
+      setLoginEmail('');
+      setLoginPassword('');
+      console.log(`[CLIENT LOGIN] Sucesso para o cliente ${client.nome}. Acessando galeria: ${matchedEvent.titulo}`);
+    } catch (err) {
+      console.error("[CLIENT LOGIN ERROR]", err);
+      setLoginError('Erro ao realizar o acesso: ' + err.message);
     }
-
-    // Achar evento vinculado a este cliente
-    const matchedEvent = eventos.find((evt) => evt.id_cliente === client.id);
-    if (!matchedEvent) {
-      setLoginError('Nenhuma galeria ativa vinculada a este cliente.');
-      return;
-    }
-
-    // Autenticar e redirecionar
-    setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
-    setSelectedGalleryToken(matchedEvent.token);
-    setActiveTab('magic-client');
-    setShowClientLogin(false);
-    setLoginEmail('');
-    setLoginPassword('');
-    console.log(`[CLIENT LOGIN] Sucesso para o cliente ${client.nome}. Acessando galeria: ${matchedEvent.titulo}`);
   };
 
   // Reseta a rota de volta para o ambiente de testes
@@ -1296,40 +1434,31 @@ export default function App() {
 
   // Renderização específica para link mágico (?gallery=token)
   if (activeTab === 'magic-client' && selectedGalleryToken) {
-    const matchedEvent = eventos.find((e) => e.token === selectedGalleryToken);
-    
-    if (!matchedEvent) {
+    if (!magicEvent) {
       return (
-        <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 text-stone-500 font-serif-editorial">
-          <h2 className="text-2xl mb-2 font-light">Link Inválido ou Galeria Removida</h2>
-          <button
-            onClick={handleBackToWorkspace}
-            className="mt-4 px-4 py-2 border border-stone-200 text-stone-900 rounded font-sans text-xs font-bold uppercase tracking-widest bg-white"
-          >
-            Voltar ao Início
-          </button>
+        <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center font-sans text-stone-900 animate-fade-in">
+          <div className="text-center space-y-4">
+            <div className="w-12 h-12 bg-stone-900 text-white rounded flex items-center justify-center font-serif text-lg tracking-widest shadow-sm mx-auto animate-spin" style={{ animationDuration: '3s' }}>
+              W
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-stone-400">Wilkson Fotografias</p>
+            <p className="text-[9px] text-stone-400">Carregando galeria...</p>
+          </div>
         </div>
       );
     }
 
-    // Carregar identificação do sessionStorage se o estado estiver nulo
-    const savedClientId = sessionStorage.getItem(`active_client_${matchedEvent.id}`);
-    let currentClient = activeClient;
-    if (!currentClient && savedClientId) {
-      const foundClient = clientes.find(c => c.id === savedClientId);
-      if (foundClient) {
-        currentClient = foundClient;
-      }
-    }
+    const matchedEvent = magicEvent;
+    const currentClient = magicClient;
 
     // Se o cliente ainda não se identificou para esta galeria, exibimos a tela de identificação/auto-cadastro
     if (!currentClient) {
       return (
         <ClientAccessPortal
           event={matchedEvent}
-          clientes={clientes}
+          onCheckEmail={handleCheckClientEmail}
           onAccessSuccess={(client) => {
-            setActiveClient(client);
+            setMagicClient(client);
             sessionStorage.setItem(`active_client_${matchedEvent.id}`, client.id);
             if (matchedEvent.acesso_restrito) {
               setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
@@ -1347,9 +1476,9 @@ export default function App() {
       return (
         <ClientAccessPortal
           event={matchedEvent}
-          clientes={clientes}
+          onCheckEmail={handleCheckClientEmail}
           onAccessSuccess={(client) => {
-            setActiveClient(client);
+            setMagicClient(client);
             sessionStorage.setItem(`active_client_${matchedEvent.id}`, client.id);
             setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
           }}
@@ -2473,7 +2602,7 @@ export default function App() {
   );
 }
 
-function ClientAccessPortal({ event, clientes, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
+function ClientAccessPortal({ event, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -2481,42 +2610,52 @@ function ClientAccessPortal({ event, clientes, onAccessSuccess, onBack, onAddCli
   const [step, setStep] = useState('email'); // 'email' | 'password' | 'register'
   const [matchedClient, setMatchedClient] = useState(null);
   const [error, setError] = useState('');
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
-  const handleEmailSubmit = (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
     if (!email.trim()) return;
 
     const trimmedEmail = email.trim().toLowerCase();
-    const foundClient = clientes.find((c) => c.email.trim().toLowerCase() === trimmedEmail);
+    setIsCheckingEmail(true);
 
-    if (foundClient) {
-      setMatchedClient(foundClient);
-      const isPermitted = (event.clientes_permitidos || []).includes(foundClient.id) || event.id_cliente === foundClient.id;
-      
-      // Se já está associado ou se a galeria permite auto-cadastro (o que significa que podemos apenas associá-lo se for existente)
-      if (isPermitted || event.permitir_auto_cadastro) {
-        // Se a associação não existia, cria agora
-        if (!isPermitted) {
-          onAssociateClientToEvent(event.id, foundClient.id);
-        }
+    try {
+      const foundClient = await onCheckEmail(trimmedEmail);
 
-        if (event.acesso_restrito) {
-          setStep('password');
+      if (foundClient) {
+        setMatchedClient(foundClient);
+        const isPermitted = (event.clientes_permitidos || []).includes(foundClient.id) || event.id_cliente === foundClient.id;
+        
+        // Se já está associado ou se a galeria permite auto-cadastro (o que significa que podemos apenas associá-lo se for existente)
+        if (isPermitted || event.permitir_auto_cadastro) {
+          // Se a associação não existia, cria agora
+          if (!isPermitted) {
+            onAssociateClientToEvent(event.id, foundClient.id);
+          }
+
+          if (event.acesso_restrito) {
+            setStep('password');
+          } else {
+            onAccessSuccess(foundClient);
+          }
         } else {
-          onAccessSuccess(foundClient);
+          setError('Este e-mail não tem permissão para acessar esta galeria. Solicite acesso ao fotógrafo.');
         }
       } else {
-        setError('Este e-mail não tem permissão para acessar esta galeria. Solicite acesso ao fotógrafo.');
+        // Cliente não encontrado
+        if (event.permitir_auto_cadastro) {
+          setStep('register');
+        } else {
+          setError('E-mail não cadastrado para esta galeria. Entre em contato com o fotógrafo.');
+        }
       }
-    } else {
-      // Cliente não encontrado
-      if (event.permitir_auto_cadastro) {
-        setStep('register');
-      } else {
-        setError('E-mail não cadastrado para esta galeria. Entre em contato com o fotógrafo.');
-      }
+    } catch (err) {
+      console.error("[PORTAL EMAIL SUBMIT ERROR]", err);
+      setError('Erro ao validar acesso. Tente novamente.');
+    } finally {
+      setIsCheckingEmail(false);
     }
   };
 
@@ -2618,9 +2757,10 @@ function ClientAccessPortal({ event, clientes, onAccessSuccess, onBack, onAddCli
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all mt-3 shadow"
+                disabled={isCheckingEmail}
+                className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 disabled:bg-stone-400 text-white rounded text-xs font-bold uppercase tracking-widest transition-all mt-3 shadow flex items-center justify-center gap-2"
               >
-                Continuar →
+                {isCheckingEmail ? 'Verificando...' : 'Continuar →'}
               </button>
             </form>
           )}

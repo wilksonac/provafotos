@@ -101,7 +101,18 @@ export default function App() {
   // Estados de Exibição de Blog e Histórias
   const [selectedWeddingId, setSelectedWeddingId] = useState(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState(null);
-  const [selectedVendorCategory, setSelectedVendorCategory] = useState('aliancas');
+  const [selectedVendorCategory, setSelectedVendorCategory] = useState('cerimonial');
+
+  // Sincroniza a categoria de fornecedores selecionada na parte pública caso ela seja removida
+  useEffect(() => {
+    if (categoriasFornecedores.length > 0) {
+      const exists = categoriasFornecedores.some(c => c.id === selectedVendorCategory);
+      if (!exists) {
+        const hasCerimonial = categoriasFornecedores.some(c => c.id === 'cerimonial');
+        setSelectedVendorCategory(hasCerimonial ? 'cerimonial' : categoriasFornecedores[0].id);
+      }
+    }
+  }, [categoriasFornecedores, selectedVendorCategory]);
   const [showAllPortfolio, setShowAllPortfolio] = useState(false);
   const [magicEvent, setMagicEvent] = useState(null);
   const [magicClient, setMagicClient] = useState(null);

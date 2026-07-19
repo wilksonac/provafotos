@@ -127,7 +127,7 @@ export default function AdminDashboard({
 
   // Estados para Fornecedores e Dicas Admin
   const [vendorAdminTab, setVendorAdminTab] = useState('tips'); // 'tips' | 'vendors'
-  const [selectedEditCategory, setSelectedEditCategory] = useState('aliancas');
+  const [selectedEditCategory, setSelectedEditCategory] = useState('cerimonial');
   const [categoryExplanationText, setCategoryExplanationText] = useState('');
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -138,7 +138,8 @@ export default function AdminDashboard({
     if (categoriasFornecedores.length > 0) {
       const exists = categoriasFornecedores.some(c => c.id === selectedEditCategory);
       if (!exists) {
-        setSelectedEditCategory(categoriasFornecedores[0].id);
+        const hasCerimonial = categoriasFornecedores.some(c => c.id === 'cerimonial');
+        setSelectedEditCategory(hasCerimonial ? 'cerimonial' : categoriasFornecedores[0].id);
       }
     }
   }, [categoriasFornecedores, selectedEditCategory]);
@@ -147,7 +148,7 @@ export default function AdminDashboard({
   const [editingVendorId, setEditingVendorId] = useState(null);
   const [vendorForm, setVendorForm] = useState({
     nome: '',
-    categoriaId: 'aliancas',
+    categoriaId: 'cerimonial',
     descricao: '',
     cidade: '',
     contato: '',
@@ -2676,7 +2677,7 @@ Qualquer dúvida estou à disposição!`);
                     setEditingVendorId(null);
                     setVendorForm({
                       nome: '',
-                      categoriaId: selectedEditCategory || 'aliancas',
+                      categoriaId: selectedEditCategory || 'cerimonial',
                       descricao: '',
                       cidade: '',
                       contato: '',
@@ -2742,7 +2743,7 @@ Qualquer dúvida estou à disposição!`);
                                       setEditingVendorId(vendor.id);
                                       setVendorForm({
                                         nome: vendor.nome || '',
-                                        categoriaId: vendor.categoriaId || 'aliancas',
+                                        categoriaId: vendor.categoriaId || 'cerimonial',
                                         descricao: vendor.descricao || '',
                                         cidade: vendor.cidade || '',
                                         contato: vendor.contato || '',

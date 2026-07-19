@@ -105,6 +105,8 @@ export default function App() {
   const [showAllPortfolio, setShowAllPortfolio] = useState(false);
   const [magicEvent, setMagicEvent] = useState(null);
   const [magicClient, setMagicClient] = useState(null);
+  const [loadFullPortfolio, setLoadFullPortfolio] = useState(false);
+  const [loadPreviews, setLoadPreviews] = useState(false);
   const [contato, setContato] = useState({
     telefone: '(11) 98888-7777',
     whatsapp: '5511988887777',
@@ -139,6 +141,14 @@ export default function App() {
     } catch (e) {}
   }, [authenticatedGalleries]);
 
+  // Dispara o carregamento dos previews em segundo plano (atraso de 1.5s) após o site ser montado
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadPreviews(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Sincronizar dados públicos do Firestore em tempo real com controle de Loading inicial leve
   useEffect(() => {
     if (!db) {
@@ -146,12 +156,10 @@ export default function App() {
       return;
     }
 
-    console.log("[FIREBASE] Ativando ouvintes públicos em tempo real...");
+    console.log("[FIREBASE] Ativando ouvinte de portfólio destacado para carregamento inicial...");
 
     let loadedCollections = {
-      portfolio: false,
-      realWeddings: false,
-      blogPosts: false
+      portfolioDestaques: false
     };
 
     const checkAllLoaded = (collectionName) => {
@@ -161,70 +169,23 @@ export default function App() {
       }
     };
 
-    const defaultCats = [
-      { id: 'aliancas', nome: 'Alianças', explicacao: 'As alianças são o símbolo material da união. Ao escolher, considerem o conforto para o dia a dia, a qualidade do metal (geralmente ouro 18k) e o estilo que combine com a personalidade de ambos. É recomendável encomendar com pelo menos 3 meses de antecedência.' },
-      { id: 'buffet', nome: 'Buffet', explicacao: 'O buffet é um dos pilares do casamento. Avaliem o estilo do serviço (americano, franco-americano ou empratado) de acordo com o perfil dos convidados. Lembrem-se de realizar degustações completas e atentar para restrições alimentares (vegetarianos, intolerantes, etc.).' },
-      { id: 'local', nome: 'Espaço / Local', explicacao: 'A escolha do espaço define toda a logística do evento. Considerem a capacidade de convidados, plano B para casamentos ao ar livre (em caso de chuva), restrições de horário e ruído, e se a infraestrutura de banheiros e cozinha atende aos fornecedores contratados.' },
-      { id: 'decoracao', nome: 'Decoração', explicacao: 'A decoração expressa a identidade visual e o clima do casamento. Reúnam referências de paletas de cores e estilos (clássico, boho, rústico ou minimalista). Definam prioridades de destaque, como o altar e a mesa de doces.' },
-      { id: 'vestido', nome: 'Vestido de Noiva', explicacao: 'O vestido ideal é aquele que faz você se sentir confiante e confortável. Comecem a busca com 8 a 10 meses de antecedência. Considerem o local e o horário da cerimônia na escolha do tecido e corte.' },
-      { id: 'cerimonial', nome: 'Cerimonial', explicacao: 'O cerimonial é o anjo da guarda do casal. Eles organizam o cronograma, coordenam os fornecedores no dia e garantem que tudo corra perfeitamente. Contratar uma assessoria completa desde o início economiza tempo e previne surpresas.' },
-      { id: 'musica', nome: 'DJ & Banda', explicacao: 'A música dita a energia da festa. Escolham profissionais que saibam ler a pista e adaptar o repertório em tempo real. Alinhem previamente a lista de músicas indispensáveis e aquelas que não devem tocar de jeito nenhum.' },
-      { id: 'foto_video', nome: 'Foto & Vídeo', explicacao: 'A fotografia e o vídeo são as lembranças eternas do seu dia. Analisem o portfólio completo dos profissionais para entender seu estilo (documental, posado, fine art). A sintonia pessoal com a equipe é essencial, pois eles estarão ao seu lado o dia todo.' }
-    ];
-
-    const unsubscribeFornecedoresDoc = onSnapshot(doc(db, "eventos", "config_fornecedores"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setCategoriasFornecedores(data.categorias || defaultCats);
-        setFornecedores(data.fornecedores || []);
-      } else {
-        console.log("[FIREBASE] Inicializando documento config_fornecedores no Firestore...");
-        setDoc(doc(db, "eventos", "config_fornecedores"), {
-          categorias: defaultCats,
-          fornecedores: []
-        }).catch(err => console.error("[FIREBASE] Erro ao criar config_fornecedores:", err));
-
-        setCategoriasFornecedores(defaultCats);
-        setFornecedores([]);
+    // Buscando apenas as fotos destacadas (destaque === true) se o portfólio completo não for requisitado
+    const qPortfolioDestaques = query(collection(db, "portfolio"), where("destaque", "==", true));
+    
+    const unsubscribePortfolioDestaques = onSnapshot(qPortfolioDestaques, (snapshot) => {
+      if (loadFullPortfolio) {
+        checkAllLoaded('portfolioDestaques');
+        return;
       }
-    }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar config_fornecedores:", error);
-    });
-
-    const unsubscribePortfolio = onSnapshot(collection(db, "portfolio"), (snapshot) => {
       const docs = [];
       snapshot.forEach((doc) => {
         docs.push({ id: doc.id, ...doc.data() });
       });
       setPortfolio(docs);
-      checkAllLoaded('portfolio');
+      checkAllLoaded('portfolioDestaques');
     }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar portfólio:", error);
-      checkAllLoaded('portfolio');
-    });
-
-    const unsubscribeRealWeddings = onSnapshot(collection(db, "real_weddings"), (snapshot) => {
-      const docs = [];
-      snapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
-      });
-      setRealWeddings(docs);
-      checkAllLoaded('realWeddings');
-    }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar casamentos reais:", error);
-      checkAllLoaded('realWeddings');
-    });
-
-    const unsubscribeBlogPosts = onSnapshot(collection(db, "blog_posts"), (snapshot) => {
-      const docs = [];
-      snapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
-      });
-      setBlogPosts(docs);
-      checkAllLoaded('blogPosts');
-    }, (error) => {
-      console.error("[FIREBASE] Erro ao sincronizar blog posts:", error);
-      checkAllLoaded('blogPosts');
+      console.error("[FIREBASE] Erro ao sincronizar portfólio destacado:", error);
+      checkAllLoaded('portfolioDestaques');
     });
 
     const unsubscribeContato = onSnapshot(doc(db, "configuracoes", "contato"), (docSnap) => {
@@ -244,14 +205,104 @@ export default function App() {
     });
 
     return () => {
-      unsubscribeFornecedoresDoc();
-      unsubscribePortfolio();
-      unsubscribeRealWeddings();
-      unsubscribeBlogPosts();
+      unsubscribePortfolioDestaques();
       unsubscribeContato();
       unsubscribeTemplate();
     };
-  }, []);
+  }, [db, loadFullPortfolio]);
+
+  // Ouvinte para o Portfólio completo quando solicitado (ou para Administradores)
+  useEffect(() => {
+    if (!db || (!loadFullPortfolio && !isAdminAuthenticated)) return;
+
+    console.log("[FIREBASE] Ativando ouvinte de portfólio COMPLETO...");
+    const unsubscribe = onSnapshot(collection(db, "portfolio"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setPortfolio(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar portfólio completo:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, loadFullPortfolio, isAdminAuthenticated]);
+
+  // Ouvinte para o Casamentos Reais (Histórias) carregado sob demanda
+  useEffect(() => {
+    if (!db || (!isAdminAuthenticated && activeTab !== 'real-weddings' && !selectedWeddingId && !loadPreviews)) return;
+
+    console.log("[FIREBASE] Ativando ouvinte de Casamentos Reais (Histórias) sob demanda...");
+    const unsubscribe = onSnapshot(collection(db, "real_weddings"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setRealWeddings(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar casamentos reais:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, activeTab, selectedWeddingId, loadPreviews, isAdminAuthenticated]);
+
+  // Ouvinte para o Blog carregado sob demanda
+  useEffect(() => {
+    if (!db || (!isAdminAuthenticated && activeTab !== 'blog' && !selectedBlogPostId && !loadPreviews)) return;
+
+    console.log("[FIREBASE] Ativando ouvinte de posts do Blog sob demanda...");
+    const unsubscribe = onSnapshot(collection(db, "blog_posts"), (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setBlogPosts(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar posts do blog:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, activeTab, selectedBlogPostId, loadPreviews, isAdminAuthenticated]);
+
+  // Ouvinte para o Guia de Fornecedores carregado sob demanda
+  useEffect(() => {
+    if (!db || (!isAdminAuthenticated && activeTab !== 'fornecedores')) return;
+
+    console.log("[FIREBASE] Ativando ouvinte de Fornecedores sob demanda...");
+    
+    const defaultCats = [
+      { id: 'aliancas', nome: 'Alianças', explicacao: 'As alianças são o símbolo material da união. Ao escolher, considerem o conforto para o dia a dia, a qualidade do metal (geralmente ouro 18k) e o estilo que combine com a personalidade de ambos. É recomendável encomendar com pelo menos 3 meses de antecedência.' },
+      { id: 'buffet', nome: 'Buffet', explicacao: 'O buffet é um dos pilares do casamento. Avaliem o estilo do serviço (americano, franco-americano ou empratado) de acordo com o perfil dos convidados. Lembrem-se de realizar degustações completas e atentar para restrições alimentares (vegetarianos, intolerantes, etc.).' },
+      { id: 'local', nome: 'Espaço / Local', explicacao: 'A escolha do espaço define toda a logística do evento. Considerem a capacidade de convidados, plano B para casamentos ao ar livre (em caso de chuva), restrições de horário e ruído, e se a infraestrutura de banheiros e cozinha atende aos fornecedores contratados.' },
+      { id: 'decoracao', nome: 'Decoração', explicacao: 'A decoração expressa a identidade visual e o clima do casamento. Reúnam referências de paletas de cores e estilos (clássico, boho, rústico ou minimalista). Definam prioridades de destaque, como o altar e a mesa de doces.' },
+      { id: 'vestido', nome: 'Vestido de Noiva', explicacao: 'O vestido ideal é aquele que faz você se sentir confiante e confortável. Comecem a busca com 8 a 10 meses de antecedência. Considerem o local e o horário da cerimônia na escolha do tecido e corte.' },
+      { id: 'cerimonial', nome: 'Cerimonial', explicacao: 'O cerimonial é o anjo da guarda do casal. Eles organizam o cronograma, coordenam os fornecedores no dia e garantem que tudo corra perfeitamente. Contratar uma assessoria completa desde o início economiza tempo e previne surpresas.' },
+      { id: 'musica', nome: 'DJ & Banda', explicacao: 'A música dita a energia da festa. Escolham profissionais que saibam ler a pista e adaptar o repertório em tempo real. Alinhem previamente a lista de músicas indispensáveis e aquelas que não devem tocar de jeito nenhum.' },
+      { id: 'foto_video', nome: 'Foto & Vídeo', explicacao: 'A fotografia e o vídeo são as lembranças eternas do seu dia. Analisem o portfólio completo dos profissionais para entender seu estilo (documental, posado, fine art). A sintonia pessoal com a equipe é essencial, pois eles estarão ao seu lado o dia todo.' }
+    ];
+
+    const unsubscribe = onSnapshot(doc(db, "eventos", "config_fornecedores"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCategoriasFornecedores(data.categorias || defaultCats);
+        setFornecedores(data.fornecedores || []);
+      } else {
+        console.log("[FIREBASE] Inicializando documento config_fornecedores no Firestore...");
+        setDoc(doc(db, "eventos", "config_fornecedores"), {
+          categorias: defaultCats,
+          fornecedores: []
+        }).catch(err => console.error("[FIREBASE] Erro ao criar config_fornecedores:", err));
+
+        setCategoriasFornecedores(defaultCats);
+        setFornecedores([]);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar config_fornecedores:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, activeTab, isAdminAuthenticated]);
 
   // localStorage removido — dados vêm exclusivamente do Firestore em tempo real
 
@@ -1744,6 +1795,7 @@ export default function App() {
                       setPortfolioCategory(cat.id);
                       setLightboxIndex(null);
                       setShowAllPortfolio(false);
+                      setLoadFullPortfolio(true);
                     }}
                     className={`px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all rounded ${
                       portfolioCategory === cat.id
@@ -1789,7 +1841,10 @@ export default function App() {
             {portfolioCategory === 'todos' && !showAllPortfolio && portfolio.length > filteredPortfolio.length && (
               <div className="text-center pt-6 pb-2 animate-reveal">
                 <button
-                  onClick={() => setShowAllPortfolio(true)}
+                  onClick={() => {
+                    setShowAllPortfolio(true);
+                    setLoadFullPortfolio(true);
+                  }}
                   className="px-6 py-2.5 border border-stone-900 text-stone-900 font-sans text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded hover:bg-stone-900 hover:text-white transition-all shadow-2xs"
                 >
                   Ver Mais Fotos

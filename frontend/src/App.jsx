@@ -1750,7 +1750,7 @@ export default function App() {
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
-              Blog
+              Dicas
             </button>
             <button
               onClick={() => {
@@ -2180,7 +2180,7 @@ export default function App() {
                 <div className="text-center py-6">
                   <span className="text-[9px] font-extrabold tracking-widest uppercase text-stone-400 font-sans">Guia e Dicas para Noivos</span>
                   <h2 className="font-serif-editorial text-3xl sm:text-5xl text-stone-900 font-light tracking-wide mt-1">Dicas & Inspirações</h2>
-                  <p className="text-xs text-stone-400 mt-2 uppercase tracking-wider font-semibold">Tudo o que você precisa saber para planejar o ensaio perfeito</p>
+                  <p className="text-xs text-stone-400 mt-2 uppercase tracking-wider font-semibold">Tudo o que você precisa saber para planejar o ensaio e casamento perfeitos</p>
                 </div>
 
                 {blogPosts.length === 0 ? (
@@ -2659,7 +2659,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-400 font-light">
                 <button onClick={() => { setActiveTab('client'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Portfólio</button>
                 <button onClick={() => { setActiveTab('real-weddings'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Histórias</button>
-                <button onClick={() => { setActiveTab('blog'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Blog</button>
+                <button onClick={() => { setActiveTab('blog'); window.scrollTo(0,0); }} className="text-left hover:text-white transition-colors">Dicas</button>
                 <button onClick={() => { setShowClientLogin(true); }} className="text-left hover:text-white transition-colors">Área do Cliente</button>
               </div>
             </div>

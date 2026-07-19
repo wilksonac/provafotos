@@ -1185,6 +1185,42 @@ export default function App() {
     }
   };
 
+  // Adicionar Categoria de Fornecedores
+  const handleAddCategoryFornecedor = async (nome, explicacao) => {
+    const cleanId = nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const newCat = {
+      id: `${cleanId}_${Date.now()}`,
+      nome: nome.trim(),
+      explicacao: explicacao ? explicacao.trim() : ''
+    };
+    console.log("[FIREBASE] Adicionando nova categoria de fornecedores:", newCat.nome);
+    const updatedCats = [...categoriasFornecedores, newCat];
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: updatedCats,
+        fornecedores: fornecedores
+      }, { merge: true });
+    } else {
+      setCategoriasFornecedores(updatedCats);
+    }
+  };
+
+  // Excluir Categoria de Fornecedores
+  const handleDeleteCategoryFornecedor = async (categoryId) => {
+    console.log("[FIREBASE] Excluindo categoria de fornecedores:", categoryId);
+    const updatedCats = categoriasFornecedores.filter(c => c.id !== categoryId);
+
+    if (db) {
+      await setDoc(doc(db, "eventos", "config_fornecedores"), {
+        categorias: updatedCats,
+        fornecedores: fornecedores
+      }, { merge: true });
+    } else {
+      setCategoriasFornecedores(updatedCats);
+    }
+  };
+
   // Salvar/Editar texto explicativo da Categoria
   const handleSaveCategoryExplanation = async (categoryId, explanationText) => {
     console.log("[FIREBASE] Salvando explicação da categoria:", categoryId);
@@ -2429,6 +2465,8 @@ export default function App() {
               onAddVendor={handleAddVendor}
               onUpdateVendor={handleUpdateVendor}
               onDeleteVendor={handleDeleteVendor}
+              onAddCategoryFornecedor={handleAddCategoryFornecedor}
+              onDeleteCategoryFornecedor={handleDeleteCategoryFornecedor}
             />
           )
         )}

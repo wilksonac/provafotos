@@ -50,7 +50,9 @@ export default function AdminDashboard({
   onSaveCategoryExplanation,
   onAddVendor,
   onUpdateVendor,
-  onDeleteVendor
+  onDeleteVendor,
+  onAddCategoryFornecedor,
+  onDeleteCategoryFornecedor
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
@@ -127,6 +129,20 @@ export default function AdminDashboard({
   const [vendorAdminTab, setVendorAdminTab] = useState('tips'); // 'tips' | 'vendors'
   const [selectedEditCategory, setSelectedEditCategory] = useState('aliancas');
   const [categoryExplanationText, setCategoryExplanationText] = useState('');
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryExplanation, setNewCategoryExplanation] = useState('');
+
+  // Sincroniza a categoria selecionada para edição caso a selecionada anteriormente seja deletada
+  React.useEffect(() => {
+    if (categoriasFornecedores.length > 0) {
+      const exists = categoriasFornecedores.some(c => c.id === selectedEditCategory);
+      if (!exists) {
+        setSelectedEditCategory(categoriasFornecedores[0].id);
+      }
+    }
+  }, [categoriasFornecedores, selectedEditCategory]);
+
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState(null);
   const [vendorForm, setVendorForm] = useState({
@@ -2538,30 +2554,73 @@ Qualquer dúvida estou à disposição!`);
           {/* Aba A: Dicas por Categoria */}
           {vendorAdminTab === 'tips' && (
             <div className="bg-white border border-stone-200 rounded-xl p-6 shadow-xs max-w-2xl mx-auto space-y-5">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Selecione a Categoria para Editar</label>
-                <select
-                  value={selectedEditCategory}
-                  onChange={(e) => setSelectedEditCategory(e.target.value)}
-                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-stone-400 focus:outline-none"
-                >
-                  {categoriasFornecedores.length > 0 ? (
-                    categoriasFornecedores.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome}</option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="aliancas">Alianças</option>
-                      <option value="buffet">Buffet</option>
-                      <option value="local">Espaço / Local</option>
-                      <option value="decoracao">Decoração</option>
-                      <option value="vestido">Vestido de Noiva</option>
-                      <option value="cerimonial">Cerimonial</option>
-                      <option value="musica">DJ & Banda</option>
-                      <option value="foto_video">Foto & Vídeo</option>
-                    </>
+              <div className="flex flex-col md:flex-row items-end gap-3">
+                <div className="flex-grow space-y-1 w-full">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Selecione a Categoria para Editar</label>
+                  <select
+                    value={selectedEditCategory}
+                    onChange={(e) => setSelectedEditCategory(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-stone-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-stone-400 focus:outline-none"
+                  >
+                    {categoriasFornecedores.length > 0 ? (
+                      categoriasFornecedores.map(c => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="aliancas">Alianças</option>
+                        <option value="buffet">Buffet</option>
+                        <option value="local">Espaço / Local</option>
+                        <option value="decoracao">Decoração</option>
+                        <option value="vestido">Vestido de Noiva</option>
+                        <option value="cerimonial">Cerimonial</option>
+                        <option value="musica">DJ & Banda</option>
+                        <option value="foto_video">Foto & Vídeo</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCategoryModal(true)}
+                    className="flex-1 md:flex-none px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                    title="Criar Nova Categoria"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Nova Categoria
+                  </button>
+
+                  {categoriasFornecedores.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const targetCat = categoriasFornecedores.find(c => c.id === selectedEditCategory);
+                        if (!targetCat) return;
+                        if (confirm(`Tem certeza de que deseja excluir a categoria "${targetCat.nome}"? Todos os fornecedores cadastrados sob esta categoria ficarão sem categoria vinculada.`)) {
+                          try {
+                            if (onDeleteCategoryFornecedor) {
+                              await onDeleteCategoryFornecedor(selectedEditCategory);
+                              alert("Categoria excluída com sucesso!");
+                            }
+                          } catch (err) {
+                            alert("Erro ao excluir categoria: " + err.message);
+                          }
+                        }
+                      }}
+                      className="flex-1 md:flex-none px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                      title="Excluir Categoria Atual"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                      Excluir
+                    </button>
                   )}
-                </select>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -2873,7 +2932,101 @@ Qualquer dúvida estou à disposição!`);
                   {editingVendorId ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
                 </button>
               </div>
-            </form>
+          </form>
+        </div>
+      </div>
+    )}
+
+      {/* Modal para Adicionar Categoria */}
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 bg-stone-950/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div 
+            className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botão Fechar */}
+            <button
+              onClick={() => {
+                setShowAddCategoryModal(false);
+                setNewCategoryName('');
+                setNewCategoryExplanation('');
+              }}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Novo Catálogo</span>
+                <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Criar Categoria</h3>
+                <p className="text-[11px] text-stone-400 mt-1">Insira o nome da nova categoria de fornecedores.</p>
+              </div>
+
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newCategoryName.trim()) return;
+                  try {
+                    if (onAddCategoryFornecedor) {
+                      await onAddCategoryFornecedor(newCategoryName, newCategoryExplanation);
+                      alert("Categoria criada com sucesso!");
+                      setNewCategoryName('');
+                      setNewCategoryExplanation('');
+                      setShowAddCategoryModal(false);
+                    }
+                  } catch (err) {
+                    alert("Erro ao criar categoria: " + err.message);
+                  }
+                }}
+                className="space-y-3.5 pt-2"
+              >
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Nome da Categoria</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Ex: Lembrancinhas, Convites"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Dicas de Planejamento (Opcional)</label>
+                  <textarea
+                    rows="3"
+                    value={newCategoryExplanation}
+                    onChange={(e) => setNewCategoryExplanation(e.target.value)}
+                    placeholder="Dicas iniciais para ajudar a noiva a escolher esse fornecedor..."
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50 leading-relaxed font-light"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddCategoryModal(false);
+                      setNewCategoryName('');
+                      setNewCategoryExplanation('');
+                    }}
+                    className="px-4 py-2 border border-stone-200 hover:bg-stone-50 text-[10px] font-bold uppercase tracking-widest text-stone-500 rounded"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-stone-900 hover:bg-stone-850 text-white text-[10px] font-bold uppercase tracking-widest rounded transition-all shadow-xs"
+                  >
+                    Criar Categoria
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

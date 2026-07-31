@@ -32,19 +32,36 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 async function check() {
-  console.log("Fetching selecoes...");
-  const selecoesSnap = await getDocs(collection(db, "selecoes"));
-  console.log(`Found ${selecoesSnap.size} selecoes:`);
-  selecoesSnap.forEach(doc => {
-    console.log(`- ID: ${doc.id}`, JSON.stringify(doc.data()));
-  });
+  console.log("Fetching clientes...");
+  try {
+    const clientesSnap = await getDocs(collection(db, "clientes"));
+    console.log(`Found ${clientesSnap.size} clientes:`);
+    clientesSnap.forEach(doc => {
+      const data = doc.data();
+      if (data.nome && data.nome.toLowerCase().includes('franciny')) {
+        console.log(`[FOUND FRANCINY CLIENT] ID: ${doc.id}`, JSON.stringify(data));
+      } else {
+        console.log(`- ID: ${doc.id}`, data.nome);
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching clientes:", err);
+  }
 
   console.log("\nFetching eventos...");
-  const eventosSnap = await getDocs(collection(db, "eventos"));
-  console.log(`Found ${eventosSnap.size} eventos:`);
-  eventosSnap.forEach(doc => {
-    console.log(`- ID: ${doc.id}`, JSON.stringify(doc.data()));
-  });
+  try {
+    const eventosSnap = await getDocs(collection(db, "eventos"));
+    console.log(`Found ${eventosSnap.size} eventos:`);
+    eventosSnap.forEach(doc => {
+      const data = doc.data();
+      console.log(`- ID: ${doc.id} | Titulo: ${data.titulo} | ClientId: ${data.id_cliente}`);
+      if (data.selecoes_clientes) {
+        console.log("  Selections:", JSON.stringify(data.selecoes_clientes));
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching eventos:", err);
+  }
 }
 
 check().catch(console.error);

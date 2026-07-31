@@ -81,8 +81,21 @@ export default function App() {
         });
       }
     });
+    // Adiciona as seleções do evento mágico atual (clientes) se ele não estiver na lista global de eventos (o que ocorre com não-admins)
+    if (magicEvent && !(eventos || []).some(e => e.id === magicEvent.id)) {
+      if (magicEvent.selecoes_clientes) {
+        Object.entries(magicEvent.selecoes_clientes).forEach(([clientId, selData]) => {
+          list.push({
+            id: `${magicEvent.id}_${clientId}`,
+            id_evento: magicEvent.id,
+            id_cliente: clientId,
+            ...selData
+          });
+        });
+      }
+    }
     return list;
-  }, [eventos]);
+  }, [eventos, magicEvent]);
   const [activeClient, setActiveClient] = useState(null);
 
   // Navegação e Controle de Rotas
@@ -656,7 +669,10 @@ export default function App() {
   // Toggles de seleção na galeria do cliente
   const handleToggleSelection = (eventId, photoId, isSelected, clientId) => {
     if (!clientId) return;
-    const targetEvent = eventos.find(e => e.id === eventId);
+    let targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent && magicEvent && magicEvent.id === eventId) {
+      targetEvent = magicEvent;
+    }
     if (!targetEvent) return;
 
     const eventSelections = targetEvent.selecoes_clientes || {};
@@ -704,13 +720,28 @@ export default function App() {
         }
         return e;
       }));
+      if (magicEvent && magicEvent.id === eventId) {
+        setMagicEvent(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            selecoes_clientes: {
+              ...(prev.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        });
+      }
     }
   };
 
   // Finalizar evento / seleção
   const handleFinalizeEvent = (eventId, clientId) => {
     if (!clientId) return;
-    const targetEvent = eventos.find(e => e.id === eventId);
+    let targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent && magicEvent && magicEvent.id === eventId) {
+      targetEvent = magicEvent;
+    }
     if (!targetEvent) return;
 
     const eventSelections = targetEvent.selecoes_clientes || {};
@@ -733,7 +764,10 @@ export default function App() {
       })
         .then(() => {
           console.log("[FIREBASE] Seleção finalizada para o cliente:", clientId);
-          const client = clientes.find((c) => c.id === clientId);
+          let client = clientes.find((c) => c.id === clientId);
+          if (!client && magicClient && magicClient.id === clientId) {
+            client = magicClient;
+          }
           if (client && targetEvent) {
             const selectedCount = updatedClientSelection.fotos_selecionadas.length;
             const totalCount = (targetEvent.fotos || []).length;
@@ -763,8 +797,23 @@ export default function App() {
         }
         return e;
       }));
+      if (magicEvent && magicEvent.id === eventId) {
+        setMagicEvent(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            selecoes_clientes: {
+              ...(prev.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        });
+      }
 
-      const client = clientes.find((c) => c.id === clientId);
+      let client = clientes.find((c) => c.id === clientId);
+      if (!client && magicClient && magicClient.id === clientId) {
+        client = magicClient;
+      }
       if (client && targetEvent) {
         const selectedCount = updatedClientSelection.fotos_selecionadas.length;
         const totalCount = (targetEvent.fotos || []).length;

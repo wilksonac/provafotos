@@ -66,6 +66,9 @@ export default function App() {
   const [blogPosts, setBlogPosts] = useState([]);
   const [categoriasFornecedores, setCategoriasFornecedores] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [magicEvent, setMagicEvent] = useState(null);
+  const [magicClient, setMagicClient] = useState(null);
+
   // Derivar selecoes de eventos em tempo real
   const selecoes = useMemo(() => {
     const list = [];
@@ -127,8 +130,6 @@ export default function App() {
     }
   }, [categoriasFornecedores, selectedVendorCategory]);
   const [showAllPortfolio, setShowAllPortfolio] = useState(false);
-  const [magicEvent, setMagicEvent] = useState(null);
-  const [magicClient, setMagicClient] = useState(null);
   const [loadFullPortfolio, setLoadFullPortfolio] = useState(false);
   const [loadPreviews, setLoadPreviews] = useState(false);
   const [contato, setContato] = useState({

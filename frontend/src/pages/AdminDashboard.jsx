@@ -989,9 +989,23 @@ Qualquer dúvida estou à disposição!`);
                                       const selecionadasCount = selectedPhotoIds.length;
                                       const statusSel = activeSel ? activeSel.status : 'não_iniciou';
 
-                                      const targetPhotos = (evento.fotos || []).filter(f => selectedPhotoIds.includes(f.id));
-                                      const lrNames = targetPhotos.map(f => f.name.replace(/\.[^/.]+$/, "")).join(', ');
-                                      const winNames = targetPhotos.map(f => f.name).join(' OR ');
+                                      const targetPhotos = (evento.fotos || []).map((f, idx) => {
+                                        if (typeof f === 'string') {
+                                          return {
+                                            id: f,
+                                            url_storage: f,
+                                            name: `Foto ${idx + 1}`
+                                          };
+                                        }
+                                        return {
+                                          id: f.id || f.url_storage || `photo_${idx}`,
+                                          url_storage: f.url_storage || f.url || '',
+                                          name: f.name || `Foto ${idx + 1}`
+                                        };
+                                      }).filter(f => selectedPhotoIds.includes(f.id));
+
+                                      const lrNames = targetPhotos.map(f => (f.name || '').replace(/\.[^/.]+$/, "")).join(', ');
+                                      const winNames = targetPhotos.map(f => f.name || '').join(' OR ');
 
                                       return (
                                         <div key={c.id} className="p-2.5 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5 text-xs">

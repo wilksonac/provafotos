@@ -316,6 +316,20 @@ export default function PhotoVirtualGrid({
     }
   }, [tipoGaleria]);
 
+  // Filtragem dinâmica de fotos com base na cena ou aba selecionada (com suporte a ver apenas selecionadas)
+  const visiblePhotos = useMemo(() => {
+    let filtered = photos || [];
+    if (activeScene === 'Selecionadas') {
+      filtered = filtered.filter(p => p.selecionada);
+    } else if (activeScene === 'Destaques') {
+      filtered = filtered.filter(p => p.destaque);
+    } else if (activeScene !== 'Todas') {
+      // Suporte para outras subcategorias caso existam no objeto da foto
+      filtered = filtered.filter(p => p.cena === activeScene);
+    }
+    return filtered;
+  }, [photos, activeScene]);
+
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const isMobile = dimensions.width < 640;
@@ -351,7 +365,7 @@ export default function PhotoVirtualGrid({
     const columns = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
     const columnWidth = Math.floor((containerWidth - (columns - 1) * gap) / columns);
     const rowHeight = columnWidth * 0.75 + 38; 
-    const rowCount = Math.ceil(photos.length / columns);
+    const rowCount = Math.ceil(visiblePhotos.length / columns);
 
     return {
       columns,
@@ -360,7 +374,7 @@ export default function PhotoVirtualGrid({
       rowCount,
       gap
     };
-  }, [dimensions.width, photos.length]);
+  }, [dimensions.width, visiblePhotos.length]);
 
   const handlePhotoClick = useCallback((photoId) => {
     console.log(`[PHOTO_CLICK] Favoritar foto ID: ${photoId}`);
@@ -411,7 +425,7 @@ export default function PhotoVirtualGrid({
       if (e.key === 'Escape') {
         setActiveLightboxIndex(null);
       } else if (e.key === 'ArrowRight') {
-        setActiveLightboxIndex((prev) => (prev < photos.length - 1 ? prev + 1 : prev));
+        setActiveLightboxIndex((prev) => (prev < visiblePhotos.length - 1 ? prev + 1 : prev));
       } else if (e.key === 'ArrowLeft') {
         setActiveLightboxIndex((prev) => (prev > 0 ? prev - 1 : prev));
       }
@@ -419,10 +433,10 @@ export default function PhotoVirtualGrid({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeLightboxIndex, photos.length]);
+  }, [activeLightboxIndex, visiblePhotos.length]);
 
   const itemData = useMemo(() => ({
-    photos,
+    photos: visiblePhotos,
     columns: gridLayout.columns,
     columnWidth: gridLayout.columnWidth,
     gap: gridLayout.gap,
@@ -436,7 +450,7 @@ export default function PhotoVirtualGrid({
     marcaDaguaEstilo,
     isMobile
   }), [
-    photos, 
+    visiblePhotos, 
     gridLayout.columns, 
     gridLayout.columnWidth, 
     gridLayout.gap, 
@@ -463,7 +477,7 @@ export default function PhotoVirtualGrid({
     return dataEvent;
   }, [dataEvent]);
 
-  const activeLightboxPhoto = activeLightboxIndex !== null ? photos[activeLightboxIndex] : null;
+  const activeLightboxPhoto = (activeLightboxIndex !== null && activeLightboxIndex < visiblePhotos.length) ? visiblePhotos[activeLightboxIndex] : null;
 
   // Cálculos dinâmicos para colapso do cabeçalho cinematográfico no scroll
   const coverHeight = isShrunk ? 60 : (isMobile ? 180 : 320);
@@ -522,10 +536,13 @@ export default function PhotoVirtualGrid({
         {/* 2. Scene Navigation Bar */}
         <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
-            {['Todas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
+            {['Todas', 'Selecionadas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
               <button
                 key={scene}
-                onClick={() => setActiveScene(scene)}
+                onClick={() => {
+                  setActiveScene(scene);
+                  setActiveLightboxIndex(null); // Fecha o lightbox se mudar de aba para evitar índices inválidos
+                }}
                 className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 whitespace-nowrap ${
                   activeScene === scene
                     ? 'border-stone-900 text-stone-950'
@@ -560,7 +577,7 @@ export default function PhotoVirtualGrid({
             : (isMobile ? '258px' : '378px') 
         }}
       >
-        {gridLayout.columns > 0 && photos.length > 0 ? (
+        {gridLayout.columns > 0 && visiblePhotos.length > 0 ? (
           <Grid
             columnCount={gridLayout.columns}
             columnWidth={gridLayout.columnWidth}
@@ -582,7 +599,11 @@ export default function PhotoVirtualGrid({
           </Grid>
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-16 text-stone-400 font-serif-editorial">
-            <p className="text-xl">Nenhuma imagem nesta seção.</p>
+            <p className="text-xl text-center px-4">
+              {activeScene === 'Selecionadas' 
+                ? 'Nenhuma foto favoritada ainda nesta galeria.' 
+                : 'Nenhuma imagem nesta seção.'}
+            </p>
           </div>
         )}
       </div>
@@ -747,7 +768,7 @@ export default function PhotoVirtualGrid({
 
             <div className="flex items-center gap-4">
               <span className="text-xs text-stone-450 font-medium">
-                {activeLightboxIndex + 1} de {photos.length}
+                {activeLightboxIndex + 1} de {visiblePhotos.length}
               </span>
               <button
                 onClick={() => setActiveLightboxIndex(null)}
@@ -834,10 +855,10 @@ export default function PhotoVirtualGrid({
 
             {/* Right Arrow Button */}
             <button
-              onClick={() => setActiveLightboxIndex((prev) => (prev < photos.length - 1 ? prev + 1 : prev))}
-              disabled={activeLightboxIndex === photos.length - 1}
+              onClick={() => setActiveLightboxIndex((prev) => (prev < visiblePhotos.length - 1 ? prev + 1 : prev))}
+              disabled={activeLightboxIndex === visiblePhotos.length - 1}
               className={`absolute right-4 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white transition-all z-20 ${
-                activeLightboxIndex === photos.length - 1 ? 'opacity-20 cursor-not-allowed' : 'opacity-100'
+                activeLightboxIndex === visiblePhotos.length - 1 ? 'opacity-20 cursor-not-allowed' : 'opacity-100'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -483,7 +483,17 @@ export default function App() {
     }
 
     const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
-    const clientIdToFetch = savedClientId || magicEvent.id_cliente;
+    
+    // Se houver mais de um cliente associado à galeria (no conjunto de clientes_permitidos + id_cliente),
+    // e o usuário ainda não se identificou (não há savedClientId no sessionStorage),
+    // não podemos assumir o cliente padrão (magicEvent.id_cliente) para evitar login incorreto.
+    const clientIdsSet = new Set(magicEvent.clientes_permitidos || []);
+    if (magicEvent.id_cliente) {
+      clientIdsSet.add(magicEvent.id_cliente);
+    }
+    const hasMultipleClients = clientIdsSet.size > 1;
+
+    const clientIdToFetch = savedClientId || (hasMultipleClients ? null : magicEvent.id_cliente);
 
     if (!clientIdToFetch) {
       setMagicClient(null);

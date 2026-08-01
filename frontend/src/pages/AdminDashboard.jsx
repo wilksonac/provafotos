@@ -2,6 +2,23 @@ import React, { useState, useEffect } from 'react';
 
 const getEventStatus = (evento) => {
   if (evento.status === 'finalizada') return 'finalizada';
+  
+  // Se todos os clientes vinculados tiverem suas seleções concluídas, a galeria é considerada finalizada/concluída
+  const clientIds = new Set(evento.clientes_permitidos || []);
+  if (evento.id_cliente) {
+    clientIds.add(evento.id_cliente);
+  }
+  
+  if (clientIds.size > 0 && evento.selecoes_clientes) {
+    const allFinalized = Array.from(clientIds).every(cid => {
+      const selection = evento.selecoes_clientes[cid];
+      return selection && selection.status === 'finalizada';
+    });
+    if (allFinalized) {
+      return 'finalizada';
+    }
+  }
+  
   if (evento.data) {
     const todayStr = new Date().toISOString().split('T')[0];
     if (evento.data < todayStr) {

@@ -393,7 +393,8 @@ export default function App() {
                 url_storage: p,
                 name: `Foto ${idx + 1}`,
                 selecionada: false,
-                destaque: false
+                destaque: false,
+                cena: ''
               };
             }
             return {
@@ -401,7 +402,8 @@ export default function App() {
               url_storage: p.url_storage || p.url || '',
               name: p.name || `Foto ${idx + 1}`,
               selecionada: !!p.selecionada,
-              destaque: !!p.destaque
+              destaque: !!p.destaque,
+              cena: p.cena || ''
             };
           });
           docs.push({ id: docSnap.id, ...data, fotos: normalizedPhotos });
@@ -451,7 +453,8 @@ export default function App() {
               url_storage: p,
               name: `Foto ${idx + 1}`,
               selecionada: false,
-              destaque: false
+              destaque: false,
+              cena: ''
             };
           }
           return {
@@ -459,7 +462,8 @@ export default function App() {
             url_storage: p.url_storage || p.url || '',
             name: p.name || `Foto ${idx + 1}`,
             selecionada: !!p.selecionada,
-            destaque: !!p.destaque
+            destaque: !!p.destaque,
+            cena: p.cena || ''
           };
         });
         
@@ -655,7 +659,9 @@ export default function App() {
       name: uploadedFileData.name,
       url_storage: uploadedFileData.url,
       size: uploadedFileData.size || 150 * 1024, // 150KB default fallback
-      selecionada: false
+      selecionada: false,
+      cena: uploadedFileData.cena || '',
+      destaque: !!uploadedFileData.destaque
     };
 
     if (db) {
@@ -1420,6 +1426,27 @@ export default function App() {
     }
   };
 
+  // Atualizar a categoria de uma foto específica da galeria
+  const handleUpdatePhotoCategory = (eventId, photoId, newCategory) => {
+    const targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent) return;
+
+    const updatedPhotos = (targetEvent.fotos || []).map(p => {
+      if (p.id === photoId) {
+        return { ...p, cena: newCategory };
+      }
+      return p;
+    });
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), { fotos: updatedPhotos })
+        .then(() => console.log("[FIREBASE] Categoria da foto atualizada no evento:", eventId))
+        .catch(err => console.error("[FIREBASE] Erro ao atualizar categoria da foto:", err));
+    } else {
+      setEventos((prev) => prev.map(evt => evt.id === eventId ? { ...evt, fotos: updatedPhotos } : evt));
+    }
+  };
+
   // Redirecionamento da ação "Fazer Upload" no Dashboard
   const triggerEventUpload = (eventId) => {
     setActiveEventId(eventId);
@@ -1491,7 +1518,8 @@ export default function App() {
               url_storage: p,
               name: `Foto ${idx + 1}`,
               selecionada: false,
-              destaque: false
+              destaque: false,
+              cena: ''
             };
           }
           return {
@@ -1499,7 +1527,8 @@ export default function App() {
             url_storage: p.url_storage || p.url || '',
             name: p.name || `Foto ${idx + 1}`,
             selecionada: !!p.selecionada,
-            destaque: !!p.destaque
+            destaque: !!p.destaque,
+            cena: p.cena || ''
           };
         })
       });
@@ -1658,12 +1687,14 @@ export default function App() {
         id: p,
         url_storage: p,
         name: `Foto ${idx + 1}`,
-        destaque: false
+        destaque: false,
+        cena: ''
       } : {
         id: p.id || p.url_storage || `photo_${idx}`,
         url_storage: p.url_storage || p.url || '',
         name: p.name || `Foto ${idx + 1}`,
-        destaque: !!p.destaque
+        destaque: !!p.destaque,
+        cena: p.cena || ''
       };
       return {
         ...photoObj,
@@ -1708,6 +1739,7 @@ export default function App() {
             key={`${matchedEvent.id}_${currentClient.id}_${photosWithClientSelection.length}_${isFinalized ? 'finalizada' : 'ativa'}_lim_${effectiveLimit}_ext_${effectivePermitirExtras}`}
             eventId={matchedEvent.id}
             initialPhotos={photosWithClientSelection}
+            categoriasFotos={matchedEvent.categorias_fotos}
             limiteFotos={effectiveLimit}
             statusEvento={isFinalized ? 'finalizada' : matchedEvent.status}
             permitirExtras={effectivePermitirExtras}
@@ -2517,6 +2549,7 @@ export default function App() {
               onLogout={handleAdminLogout}
               onSetEventCover={handleSetEventCover}
               onDeleteEventPhoto={handleDeleteEventPhoto}
+              onUpdatePhotoCategory={handleUpdatePhotoCategory}
               onSetPortfolioCover={handleSetPortfolioCover}
               onAddRealWedding={handleAddRealWedding}
               onDeleteRealWedding={handleDeleteRealWedding}
@@ -2560,6 +2593,7 @@ export default function App() {
             
             <UploadQueue
               eventId={activeEvent.id}
+              categories={activeEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']}
               onUploadSuccess={handleUploadSuccess}
               onFinished={() => setActiveTab('admin')}
             />

@@ -12,11 +12,20 @@ const formatBytes = (bytes, decimals = 2) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-export default function UploadQueue({ eventId = 'mock_event_123', onUploadSuccess, onFinished }) {
+export default function UploadQueue({ eventId = 'mock_event_123', categories = [], onUploadSuccess, onFinished }) {
   const [queue, setQueue] = useState([]);
   const [concurrencyLimit, setConcurrencyLimit] = useState(5);
   const [useMock, setUseMock] = useState(!storage); 
   const [isDragging, setIsDragging] = useState(false);
+
+  const [batchCategory, setBatchCategory] = useState(categories[0] || '');
+  const [batchDestaque, setBatchDestaque] = useState(false);
+
+  useEffect(() => {
+    if (categories && categories.length > 0 && !batchCategory) {
+      setBatchCategory(categories[0]);
+    }
+  }, [categories]);
 
   const uploadTasksRef = useRef({});
 
@@ -88,7 +97,9 @@ export default function UploadQueue({ eventId = 'mock_event_123', onUploadSucces
             id: item.id,
             name: item.name,
             url: finalUrl,
-            size: item.totalBytes
+            size: item.totalBytes,
+            cena: item.categoria || '',
+            destaque: !!item.destaque
           });
         }
       } else {
@@ -217,7 +228,9 @@ const compressImage = (file) => {
                 id: item.id,
                 name: item.name,
                 url: downloadURL,
-                size: fileToUpload.size
+                size: fileToUpload.size,
+                cena: item.categoria || '',
+                destaque: !!item.destaque
               });
             }
           });
@@ -264,7 +277,9 @@ const compressImage = (file) => {
       bytesTransferred: 0,
       totalBytes: file.size,
       status: 'idle',
-      error: null
+      error: null,
+      categoria: batchCategory,
+      destaque: batchDestaque
     }));
 
     setQueue((prev) => [...prev, ...newItems]);
@@ -319,7 +334,7 @@ const compressImage = (file) => {
     <div className="w-full max-w-2xl mx-auto p-6 bg-white border border-stone-200 rounded-xl shadow-lg text-stone-900 font-sans animate-scale-in">
       
       {/* Header Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-stone-200/60 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4 border-b border-stone-200/60 pb-4">
         <div>
           <span className="text-[9px] uppercase tracking-widest text-stone-500 font-bold px-2 py-0.5 bg-stone-100 border border-stone-200 rounded-md">
             Fotógrafo Admin
@@ -328,9 +343,51 @@ const compressImage = (file) => {
             Fila de Upload Inteligente
           </h2>
         </div>
-        
-
       </div>
+
+      {/* Batch Controls */}
+      {!isUploadFinished && (
+        <div className="flex flex-wrap gap-4 p-3 bg-stone-50 border border-stone-200 rounded-lg mb-4 text-xs">
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-bold uppercase tracking-widest text-stone-500">
+              Categoria do lote:
+            </label>
+            <select
+              value={batchCategory}
+              onChange={(e) => {
+                const newCat = e.target.value;
+                setBatchCategory(newCat);
+                // Atualiza todos os arquivos ociosos na fila com esta categoria
+                setQueue(prev => prev.map(item => item.status === 'idle' ? { ...item, categoria: newCat } : item));
+              }}
+              className="px-2.5 py-1 border border-stone-250 rounded bg-white text-xs focus:outline-none focus:border-stone-900 cursor-pointer"
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((cat, idx) => (
+                <option key={idx} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center pt-4">
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={batchDestaque}
+                onChange={(e) => {
+                  const newDest = e.target.checked;
+                  setBatchDestaque(newDest);
+                  // Atualiza todos os arquivos ociosos na fila com este destaque
+                  setQueue(prev => prev.map(item => item.status === 'idle' ? { ...item, destaque: newDest } : item));
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
+              <span className="ml-2 text-[10px] font-bold text-stone-755 uppercase tracking-widest">Lote como Destaque (Capa)</span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Conditionally Render Success Message or Drag & Drop Area */}
       {isUploadFinished ? (
@@ -348,7 +405,10 @@ const compressImage = (file) => {
           </div>
           <div className="pt-2 flex justify-center gap-3">
             <button
-              onClick={() => setQueue([])}
+              onClick={() => {
+                setQueue([]);
+                setBatchDestaque(false);
+              }}
               className="px-4 py-2 border border-emerald-200 text-emerald-800 rounded text-xs font-bold uppercase tracking-widest hover:bg-emerald-100/50 transition-colors"
             >
               Subir Mais Fotos
@@ -437,11 +497,12 @@ const compressImage = (file) => {
         <div className="mt-5">
           <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2.5">Fila de Arquivos</h3>
           
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
             {queue.map((item) => {
               const isUploading = item.status === 'uploading';
               const isDone = item.status === 'completed';
               const isFailed = item.status === 'failed';
+              const isIdle = item.status === 'idle';
 
               return (
                 <div
@@ -449,8 +510,8 @@ const compressImage = (file) => {
                   className="flex items-center gap-3.5 p-2.5 bg-stone-50/30 border border-stone-200/40 hover:bg-stone-50/70 rounded-lg transition-all duration-200 animate-scale-in"
                 >
                   {/* Photo Preview */}
-                  <div className="w-8 h-8 rounded bg-stone-100 border border-stone-200/60 flex items-center justify-center flex-shrink-0 text-stone-400 overflow-hidden relative">
-                    {item.file && isDone && useMock ? (
+                  <div className="w-10 h-10 rounded bg-stone-100 border border-stone-200/60 flex items-center justify-center flex-shrink-0 text-stone-400 overflow-hidden relative">
+                    {item.file && useMock ? (
                       <img
                         src={URL.createObjectURL(item.file)}
                         alt="Preview"
@@ -470,13 +531,58 @@ const compressImage = (file) => {
 
                   {/* Details */}
                   <div className="flex-grow min-w-0">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-0.5">
                       <span className="text-xs font-semibold text-stone-800 truncate pr-3">{item.name}</span>
                       <span className="text-[9px] text-stone-400 font-bold">{formatBytes(item.size)}</span>
                     </div>
                     {isFailed && item.error && (
                       <div className="text-[9px] text-red-500 font-medium mb-1 line-clamp-2">
                         Erro: {item.error}
+                      </div>
+                    )}
+
+                    {/* Controles de Categoria e Destaque Individuais para Itens na Fila */}
+                    {isIdle && (
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[8px] font-bold text-stone-400 uppercase tracking-wider">Aba:</span>
+                          <select
+                            value={item.categoria || ''}
+                            onChange={(e) => updateFileState(item.id, { categoria: e.target.value })}
+                            className="px-1.5 py-0.5 border border-stone-200 rounded bg-white text-[9px] focus:outline-none cursor-pointer"
+                          >
+                            <option value="">Sem categoria</option>
+                            {categories.map((cat, idx) => (
+                              <option key={idx} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <label className="flex items-center cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={!!item.destaque}
+                            onChange={(e) => updateFileState(item.id, { destaque: e.target.checked })}
+                            className="w-3 h-3 text-stone-900 border-stone-300 rounded focus:ring-0 mr-1"
+                          />
+                          <span className="text-[9px] font-semibold text-stone-500 uppercase tracking-wider">Capa</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Visualização da categoria/destaque salvos durante e após o upload */}
+                    {(isUploading || isDone) && (
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {item.categoria && (
+                          <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.2 bg-stone-100 text-stone-600 rounded border border-stone-200/50">
+                            📁 {item.categoria}
+                          </span>
+                        )}
+                        {item.destaque && (
+                          <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded border border-amber-205">
+                            ★ Capa
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -501,7 +607,7 @@ const compressImage = (file) => {
 
                   {/* Actions & Badges */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {item.status === 'idle' && (
+                    {isIdle && (
                       <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 px-1.5 py-0.5 bg-stone-100 rounded">
                         Fila
                       </span>
@@ -522,7 +628,7 @@ const compressImage = (file) => {
                     {!isDone && (
                       <button
                         onClick={() => cancelUpload(item.id)}
-                        className="text-stone-400 hover:text-stone-600 p-0.5 rounded transition-colors"
+                        className="text-stone-400 hover:text-stone-650 p-0.5 rounded transition-colors"
                         title="Cancelar"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

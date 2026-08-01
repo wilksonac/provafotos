@@ -172,6 +172,7 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
 export default function PhotoVirtualGrid({
   eventId = 'event_abc',
   initialPhotos = [],
+  categoriasFotos = ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção'],
   limiteFotos = 25,
   statusEvento = 'ativa',
   permitirExtras = false,
@@ -253,6 +254,31 @@ export default function PhotoVirtualGrid({
   const [currentStatus, setCurrentStatus] = useState(statusEvento);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeScene, setActiveScene] = useState('Todas');
+
+  const availableScenes = useMemo(() => {
+    const scenes = ['Todas', 'Selecionadas'];
+    const cats = categoriasFotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção'];
+    
+    cats.forEach(cat => {
+      if (cat === 'Destaques') {
+        if (photos.some(p => p.destaque)) {
+          scenes.push('Destaques');
+        }
+      } else {
+        if (photos.some(p => p.cena === cat)) {
+          scenes.push(cat);
+        }
+      }
+    });
+    
+    return scenes;
+  }, [photos, categoriasFotos]);
+
+  useEffect(() => {
+    if (!availableScenes.includes(activeScene)) {
+      setActiveScene('Todas');
+    }
+  }, [availableScenes, activeScene]);
   
   // Estado para visualização de Lightbox
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
@@ -536,7 +562,7 @@ export default function PhotoVirtualGrid({
         {/* 2. Scene Navigation Bar */}
         <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
-            {['Todas', 'Selecionadas', 'Destaques', 'Preparativos', 'Cerimônia', 'Recepção'].map((scene) => (
+            {availableScenes.map((scene) => (
               <button
                 key={scene}
                 onClick={() => {

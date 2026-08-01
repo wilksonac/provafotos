@@ -35,6 +35,7 @@ export default function AdminDashboard({
   onLogout,
   onSetEventCover,
   onDeleteEventPhoto,
+  onUpdatePhotoCategory,
   onSetPortfolioCover,
   onAddRealWedding,
   onDeleteRealWedding,
@@ -115,6 +116,8 @@ export default function AdminDashboard({
   const [permitirDownload, setPermitirDownload] = useState(false);
   const [acessoRestrito, setAcessoRestrito] = useState(false);
   const [permitirAutoCadastro, setPermitirAutoCadastro] = useState(true);
+
+  const [categoriasFotos, setCategoriasFotos] = useState(['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
@@ -408,7 +411,8 @@ export default function AdminDashboard({
         tipo_galeria: tipoGaleria,
         permitir_download: permitirDownload,
         acesso_restrito: acessoRestrito,
-        permitir_auto_cadastro: permitirAutoCadastro
+        permitir_auto_cadastro: permitirAutoCadastro,
+        categorias_fotos: categoriasFotos
       };
       onUpdateEvento(editingEventId, updatedFields);
       setEditingEventId(null);
@@ -432,7 +436,8 @@ export default function AdminDashboard({
         pagamento_extras_confirmado: false,
         acesso_restrito: acessoRestrito,
         permitir_auto_cadastro: permitirAutoCadastro,
-        clientes_permitidos: targetClientId ? [targetClientId] : []
+        clientes_permitidos: targetClientId ? [targetClientId] : [],
+        categorias_fotos: categoriasFotos
       };
       onAddEvento(newEvent, clientObj);
     }
@@ -452,6 +457,7 @@ export default function AdminDashboard({
     setPermitirDownload(true);
     setAcessoRestrito(false);
     setPermitirAutoCadastro(true);
+    setCategoriasFotos(['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
     setActiveSubTab('overview');
   };
 
@@ -481,6 +487,7 @@ export default function AdminDashboard({
     setPermitirDownload(evento.permitir_download !== undefined ? !!evento.permitir_download : false);
     setAcessoRestrito(!!evento.acesso_restrito);
     setPermitirAutoCadastro(evento.permitir_auto_cadastro !== undefined ? !!evento.permitir_auto_cadastro : true);
+    setCategoriasFotos(evento.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
 
     setEditingEventId(evento.id);
     setActiveSubTab('new-gallery');
@@ -1719,6 +1726,74 @@ Qualquer dúvida estou à disposição!`);
                 <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
                 <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Auto-Cadastro</span>
               </label>
+            </div>
+          </div>
+
+          {/* Configurações de Categorias de Fotos */}
+          <div className="p-4 border border-stone-200 rounded-lg bg-stone-50/30 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-150 pb-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Categorias de Fotos</span>
+              <span className="text-[9px] text-stone-400 uppercase font-semibold">Abas da Galeria</span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Lista de tags/categorias */}
+              <div className="flex flex-wrap gap-1.5">
+                {categoriasFotos.map((cat, index) => (
+                  <span 
+                    key={index} 
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 text-white rounded text-[10px] font-bold uppercase tracking-wider shadow-sm"
+                  >
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategoriasFotos(categoriasFotos.filter((_, i) => i !== index));
+                      }}
+                      className="text-stone-300 hover:text-white font-bold ml-1 focus:outline-none"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              {/* Input para adicionar nova categoria */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Nova Categoria (Ex: Pré-wedding)"
+                  id="new-category-input"
+                  className="flex-grow px-3 py-1.5 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-white"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = e.target.value.trim();
+                      if (val && !categoriasFotos.includes(val)) {
+                        setCategoriasFotos([...categoriasFotos, val]);
+                        e.target.value = '';
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('new-category-input');
+                    const val = input.value.trim();
+                    if (val && !categoriasFotos.includes(val)) {
+                      setCategoriasFotos([...categoriasFotos, val]);
+                      input.value = '';
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-colors shadow"
+                >
+                  Adicionar
+                </button>
+              </div>
+              <p className="text-[9.5px] text-stone-400 leading-normal">
+                * Digite o nome da categoria e clique em "Adicionar" ou pressione Enter. As fotos adicionadas a essas categorias aparecerão organizadas em abas correspondentes na visualização do cliente final.
+              </p>
             </div>
           </div>
 
@@ -3375,6 +3450,20 @@ Qualquer dúvida estou à disposição!`);
                         <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex flex-col gap-1.5">
                           <span className="text-[9px] font-semibold text-stone-600 truncate">{photo.name}</span>
                           
+                          {/* Seletor de Categoria */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] uppercase tracking-wider text-stone-400 font-bold">Aba:</span>
+                            <select
+                              value={photo.cena || ''}
+                              onChange={(e) => onUpdatePhotoCategory && onUpdatePhotoCategory(modalEvent.id, photo.id, e.target.value)}
+                              className="flex-grow px-1 py-0.5 border border-stone-200 rounded text-[9px] focus:outline-none bg-white cursor-pointer"
+                            >
+                              <option value="">Sem categoria</option>
+                              {(modalEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']).map((cat, idx) => (
+                                <option key={idx} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="flex gap-1 pt-1 border-t border-stone-100/80 justify-between items-center">
                             {/* Toggle Destaque Button */}
                             {photo.destaque ? (

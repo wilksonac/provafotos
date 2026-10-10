@@ -140,7 +140,89 @@ export default function AdminDashboard({
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingEventId, setEditingEventId] = useState(null);
   const [photosModalEventId, setPhotosModalEventId] = useState(null);
+  const [photosModalFilter, setPhotosModalFilter] = useState('all'); // 'all' | 'selected'
+  const [selectedPhotosModal, setSelectedPhotosModal] = useState(null); // { eventId, clientId: string | null }
+  const [previewPhotoModal, setPreviewPhotoModal] = useState(null); // photo object for enlarged preview
+  const [expandedEventIds, setExpandedEventIds] = useState(new Set());
   const [tempTemplate, setTempTemplate] = useState('');
+
+  const toggleExpandEvent = (eventId) => {
+    setExpandedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  };
+
+  const expandAllEvents = (eventList) => {
+    setExpandedEventIds(new Set(eventList.map((e) => e.id)));
+  };
+
+  const collapseAllEvents = () => {
+    setExpandedEventIds(new Set());
+  };
+
+  // Helper para obter fotos selecionadas de um evento (global ou de um cliente específico)
+  const getSelectedPhotosForEvent = (evento, filterClientId = null) => {
+    if (!evento || !evento.fotos) return [];
+    const selectionsMap = evento.selecoes_clientes || {};
+    const selectedPhotoIdToClients = {};
+
+    const clientIdsToCheck = filterClientId
+      ? [filterClientId]
+      : Array.from(new Set([
+          ...(evento.clientes_permitidos || []),
+          ...(evento.id_cliente ? [evento.id_cliente] : []),
+          ...Object.keys(selectionsMap)
+        ]));
+
+    clientIdsToCheck.forEach((cid) => {
+      if (filterClientId && cid !== filterClientId) return;
+      const clientSel = selectionsMap[cid];
+      let photoIds = clientSel?.fotos_selecionadas || [];
+      if (photoIds.length === 0) {
+        const s = (selecoes || []).find(
+          (sel) => sel.id === `${evento.id}_${cid}` || (sel.id_evento === evento.id && sel.id_cliente === cid)
+        );
+        if (s && s.fotos_selecionadas) {
+          photoIds = s.fotos_selecionadas;
+        }
+      }
+      const clientObj = clientes.find((c) => c.id === cid) || { id: cid, nome: 'Cliente' };
+      photoIds.forEach((pid) => {
+        if (!selectedPhotoIdToClients[pid]) {
+          selectedPhotoIdToClients[pid] = [];
+        }
+        if (!selectedPhotoIdToClients[pid].some((c) => c.id === cid)) {
+          selectedPhotoIdToClients[pid].push(clientObj);
+        }
+      });
+    });
+
+    const normalizedPhotos = (evento.fotos || []).map((f, idx) => {
+      if (typeof f === 'string') {
+        return { id: f, url_storage: f, name: `Foto ${idx + 1}`, selecionada: false, destaque: false, cena: '' };
+      }
+      return {
+        id: f.id || f.url_storage || `photo_${idx}`,
+        url_storage: f.url_storage || f.url || '',
+        name: f.name || `Foto ${idx + 1}`,
+        destaque: !!f.destaque,
+        cena: f.cena || ''
+      };
+    });
+
+    return normalizedPhotos
+      .filter((p) => !!selectedPhotoIdToClients[p.id])
+      .map((p) => ({
+        ...p,
+        selectedByClients: selectedPhotoIdToClients[p.id] || []
+      }));
+  };
 
   // Estados e Handlers do Portfólio Admin
   const [portfolioCategoryAdmin, setPortfolioCategoryAdmin] = useState('casamentos');
@@ -895,11 +977,32 @@ Qualquer dúvida estou à disposição!`);
 
             return (
               <div className="space-y-4">
-                {/* Filtros de Status */}
+                {/* Filtros de Status & Controles de Expansão */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-stone-50/50 border border-stone-200/80 rounded-xl">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Filtrar por Status:</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Filtrar por Status:</span>
+                    {filteredEventos.length > 0 && (
+                      <div className="hidden sm:flex items-center gap-2 border-l border-stone-200/80 pl-3">
+                        <button
+                          type="button"
+                          onClick={() => expandAllEvents(filteredEventos)}
+                          className="text-[9px] font-bold text-stone-500 hover:text-stone-900 uppercase tracking-wider hover:underline"
+                        >
+                          Expandir Todas
+                        </button>
+                        <span className="text-stone-300">&bull;</span>
+                        <button
+                          type="button"
+                          onClick={collapseAllEvents}
+                          className="text-[9px] font-bold text-stone-500 hover:text-stone-900 uppercase tracking-wider hover:underline"
+                        >
+                          Recolher Todas
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   
-                  <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold">
+                  <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold flex-wrap">
                     <button
                       type="button"
                       onClick={() => setStatusFilter('all')}
@@ -944,197 +1047,331 @@ Qualquer dúvida estou à disposição!`);
                     <p className="text-sm">Nenhuma galeria encontrada para este filtro.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto border border-stone-150 rounded-xl">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-stone-50 border-b border-stone-150 text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                          <th className="py-4.5 px-6">Título da Galeria</th>
-                          <th className="py-4.5 px-6">Clientes / Acessos</th>
-                          <th className="py-4.5 px-6">Fotos</th>
-                          <th className="py-4.5 px-6">Limite / Regra</th>
-                          <th className="py-4.5 px-6">Status</th>
-                          <th className="py-4.5 px-6 text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100 text-sm">
-                        {filteredEventos.map((evento) => {
-                          const computedStatus = getEventStatus(evento);
-                          
-                          const getClientsForEvent = (evt) => {
-                            const list = [];
-                            const clientIds = new Set(evt.clientes_permitidos || []);
-                            if (evt.id_cliente) clientIds.add(evt.id_cliente);
-                            (selecoes || []).forEach(s => {
-                              if (s.id_evento === evt.id) {
-                                clientIds.add(s.id_cliente);
-                              }
-                            });
-                            clientIds.forEach(id => {
-                              const c = clientes.find(client => client.id === id);
-                              if (c) list.push(c);
-                            });
-                            return list;
-                          };
-                          const associatedClients = getClientsForEvent(evento);
+                  <div className="space-y-2.5">
+                    {filteredEventos.map((evento) => {
+                      const computedStatus = getEventStatus(evento);
+                      const isExpanded = expandedEventIds.has(evento.id);
+                      
+                      const getClientsForEvent = (evt) => {
+                        const list = [];
+                        const clientIds = new Set(evt.clientes_permitidos || []);
+                        if (evt.id_cliente) clientIds.add(evt.id_cliente);
+                        (selecoes || []).forEach(s => {
+                          if (s.id_evento === evt.id) {
+                            clientIds.add(s.id_cliente);
+                          }
+                        });
+                        clientIds.forEach(id => {
+                          const c = clientes.find(client => client.id === id);
+                          if (c) list.push(c);
+                        });
+                        return list;
+                      };
+                      const associatedClients = getClientsForEvent(evento);
+                      const photosCount = (evento.fotos || []).length;
 
-                          return (
-                            <tr key={evento.id} className="hover:bg-stone-50/50 transition-colors">
-                              <td className="py-4 px-6 font-medium text-stone-900">
-                                <div>
-                                  <div className="flex items-center flex-wrap gap-2">
-                                    <span className="block">{evento.titulo}</span>
-                                    <span className="inline-block text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 border border-stone-200/50">
-                                      {evento.tipo_galeria === 'festa_infantil' ? 'Festa Infantil' :
-                                       evento.tipo_galeria === 'evento_corporativo' ? 'Corporativo' :
-                                       evento.tipo_galeria === 'ensaio' ? 'Ensaio' :
-                                       evento.tipo_galeria === 'casamento' ? 'Casamento' :
-                                       evento.tipo_galeria || 'Ensaio'}
+                      // Calcular total de fotos selecionadas em todos os clientes desta galeria
+                      const allSelectedPhotos = getSelectedPhotosForEvent(evento);
+                      const totalSelectedCount = allSelectedPhotos.length;
+
+                      const selectedCount = (evento.fotos || []).filter((p) => p.selecionada).length;
+                      const hasExtras = !evento.selecao_livre && evento.limite_fotos !== null && selectedCount > evento.limite_fotos;
+
+                      return (
+                        <div
+                          key={evento.id}
+                          className={`bg-white border rounded-xl transition-all duration-200 overflow-hidden shadow-2xs ${
+                            isExpanded
+                              ? 'border-stone-400/80 shadow-xs ring-1 ring-stone-900/5'
+                              : 'border-stone-200 hover:border-stone-350'
+                          }`}
+                        >
+                          {/* Linha Compacta do Cabeçalho da Galeria */}
+                          <div
+                            onClick={() => toggleExpandEvent(evento.id)}
+                            className="p-3.5 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 cursor-pointer hover:bg-stone-50/70 select-none transition-colors"
+                          >
+                            {/* Lado Esquerdo: Ícone de expansão, Título, Tags e Metadados */}
+                            <div className="flex items-start sm:items-center gap-3 min-w-0">
+                              <div
+                                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 flex-shrink-0 mt-0.5 sm:mt-0 ${
+                                  isExpanded
+                                    ? 'bg-stone-900 text-white rotate-180 shadow-xs'
+                                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                                }`}
+                                title={isExpanded ? 'Recolher detalhes' : 'Clique para ver detalhes'}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <h4 className="font-serif-editorial text-base text-stone-900 font-normal leading-snug">
+                                    {evento.titulo}
+                                  </h4>
+
+                                  <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200/50">
+                                    {evento.tipo_galeria === 'festa_infantil' ? 'Festa Infantil' :
+                                     evento.tipo_galeria === 'evento_corporativo' ? 'Corporativo' :
+                                     evento.tipo_galeria === 'ensaio' ? 'Ensaio' :
+                                     evento.tipo_galeria === 'casamento' ? 'Casamento' :
+                                     evento.tipo_galeria || 'Ensaio'}
+                                  </span>
+
+                                  <span className={`text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                                    evento.acesso_restrito
+                                      ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                      : 'bg-stone-50 border-stone-250 text-stone-600'
+                                  }`}>
+                                    {evento.acesso_restrito ? 'Login + Senha' : 'Link Direto'}
+                                  </span>
+
+                                  <span className={`text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                    computedStatus === 'finalizada'
+                                      ? 'bg-emerald-50 border-emerald-250 text-emerald-700 font-bold'
+                                      : computedStatus === 'expirada'
+                                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                      : 'bg-amber-50 border-amber-250 text-amber-700'
+                                  }`}>
+                                    {computedStatus === 'finalizada' ? 'Finalizada' : computedStatus === 'expirada' ? 'Expirada' : 'Em Aberto'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-400 font-sans flex-wrap">
+                                  <span>📅 {evento.data || 'Sem data'}</span>
+                                  <span>&bull;</span>
+                                  <span>📷 {photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+                                  <span>&bull;</span>
+                                  <span>👥 {associatedClients.length} {associatedClients.length === 1 ? 'cliente' : 'clientes'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Lado Direito: Contadores Rápidos e Botões de Ação */}
+                            <div
+                              className="flex items-center gap-2 flex-wrap sm:flex-nowrap self-end md:self-auto w-full md:w-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-stone-100"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* Botão Ver Fotos Selecionadas */}
+                              {totalSelectedCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPhotosModal({ eventId: evento.id, clientId: null })}
+                                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-250 rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shadow-2xs"
+                                  title="Ver as fotos que foram selecionadas nesta galeria"
+                                >
+                                  <span>👁️ Ver Seleção ({totalSelectedCount})</span>
+                                </button>
+                              ) : (
+                                <span className="text-[9px] text-stone-400 font-medium px-2 py-1 bg-stone-50 rounded border border-stone-200/50">
+                                  0 selecionadas
+                                </span>
+                              )}
+
+                              {/* Upload Rápido */}
+                              <button
+                                type="button"
+                                onClick={() => onSelectEventUpload(evento.id)}
+                                className="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200/80 text-stone-700 rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors"
+                                title="Enviar fotos para esta galeria"
+                              >
+                                Upload
+                              </button>
+
+                              {/* Ver Galeria */}
+                              <button
+                                type="button"
+                                onClick={() => onSelectEventView(evento.token)}
+                                className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors shadow-2xs"
+                                title="Abrir visualização do cliente"
+                              >
+                                Ver
+                              </button>
+
+                              {/* Botão de Toggle Detalhes */}
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandEvent(evento.id)}
+                                className="px-2.5 py-1.5 border border-stone-250 hover:border-stone-400 bg-white hover:bg-stone-50 text-stone-600 rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors"
+                              >
+                                {isExpanded ? 'Recolher' : 'Detalhes'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Painel Expansível de Detalhes da Galeria */}
+                          {isExpanded && (
+                            <div className="border-t border-stone-200/80 p-4 sm:p-6 bg-stone-50/40 space-y-6 animate-fade-in">
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                
+                                {/* Coluna 1 (7 cols): Clientes Vinculados & Suas Seleções */}
+                                <div className="lg:col-span-7 space-y-3">
+                                  <div className="flex items-center justify-between pb-1 border-b border-stone-200/60">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                      Clientes Vinculados & Seleções
                                     </span>
-                                    <span className={`inline-block text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                                      evento.acesso_restrito
-                                        ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                        : 'bg-stone-50 border-stone-250 text-stone-600'
-                                    }`}>
-                                      {evento.acesso_restrito ? 'Login + Senha' : 'Link Direto'}
+                                    <span className="text-[9px] text-stone-400 font-medium">
+                                      {associatedClients.length} {associatedClients.length === 1 ? 'cliente' : 'clientes'}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] text-stone-400 font-sans uppercase font-semibold">{evento.data}</span>
-                                </div>
-                              </td>
-                              <td className="py-4 px-6 text-stone-700 max-w-[280px]">
-                                <div className="space-y-3">
+
                                   {associatedClients.length === 0 ? (
-                                    <span className="text-xs text-stone-400 italic">Nenhum cliente vinculado</span>
+                                    <div className="p-4 bg-white border border-stone-200/80 rounded-xl text-center text-xs text-stone-400 italic">
+                                      Nenhum cliente vinculado a esta galeria ainda.
+                                    </div>
                                   ) : (
-                                    associatedClients.map((c) => {
-                                      const selectionId = `${evento.id}_${c.id}`;
-                                      const activeSel = (selecoes || []).find(s => s.id === selectionId);
-                                      const selectedPhotoIds = activeSel ? (activeSel.fotos_selecionadas || []) : [];
-                                      const selecionadasCount = selectedPhotoIds.length;
-                                      const statusSel = activeSel ? activeSel.status : 'não_iniciou';
+                                    <div className="space-y-2.5">
+                                      {associatedClients.map((c) => {
+                                        const selectionId = `${evento.id}_${c.id}`;
+                                        const activeSel = (selecoes || []).find(s => s.id === selectionId);
+                                        const selectedPhotoIds = activeSel ? (activeSel.fotos_selecionadas || []) : [];
+                                        const selecionadasCount = selectedPhotoIds.length;
+                                        const statusSel = activeSel ? activeSel.status : 'não_iniciou';
 
-                                      const targetPhotos = (evento.fotos || []).map((f, idx) => {
-                                        if (typeof f === 'string') {
+                                        const targetPhotos = (evento.fotos || []).map((f, idx) => {
+                                          if (typeof f === 'string') {
+                                            return { id: f, url_storage: f, name: `Foto ${idx + 1}` };
+                                          }
                                           return {
-                                            id: f,
-                                            url_storage: f,
-                                            name: `Foto ${idx + 1}`
+                                            id: f.id || f.url_storage || `photo_${idx}`,
+                                            url_storage: f.url_storage || f.url || '',
+                                            name: f.name || `Foto ${idx + 1}`
                                           };
-                                        }
-                                        return {
-                                          id: f.id || f.url_storage || `photo_${idx}`,
-                                          url_storage: f.url_storage || f.url || '',
-                                          name: f.name || `Foto ${idx + 1}`
-                                        };
-                                      }).filter(f => selectedPhotoIds.includes(f.id));
+                                        }).filter(f => selectedPhotoIds.includes(f.id));
 
-                                      const lrNames = targetPhotos.map(f => (f.name || '').replace(/\.[^/.]+$/, "")).join(', ');
-                                      const winNames = targetPhotos.map(f => f.name || '').join(' OR ');
+                                        const lrNames = targetPhotos.map(f => (f.name || '').replace(/\.[^/.]+$/, "")).join(', ');
+                                        const winNames = targetPhotos.map(f => f.name || '').join(' OR ');
 
-                                      return (
-                                        <div key={c.id} className="p-2.5 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5 text-xs">
-                                          <div className="flex items-start justify-between gap-1.5">
-                                            <div className="truncate flex-grow flex items-start gap-1">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (confirm(`Deseja realmente desvincular o cliente "${c.nome}" desta galeria?`)) {
-                                                    onUnassociateClient(evento.id, c.id);
-                                                  }
-                                                }}
-                                                className="text-stone-350 hover:text-red-650 transition-colors font-bold text-[10px] mt-0.5 flex-shrink-0"
-                                                title="Desvincular Cliente"
-                                              >
-                                                ✕
-                                              </button>
-                                              <div className="truncate">
-                                                <span className="block font-semibold text-stone-850 truncate" title={c.nome}>{c.nome}</span>
-                                                <span className="text-[9px] text-stone-400 block truncate" title={c.email}>{c.email}</span>
+                                        return (
+                                          <div
+                                            key={c.id}
+                                            className="p-3 bg-white border border-stone-200/80 rounded-xl space-y-2 text-xs shadow-2xs hover:border-stone-300 transition-colors"
+                                          >
+                                            {/* Cabeçalho do Cliente */}
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="truncate flex-grow flex items-start gap-1.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    if (confirm(`Deseja realmente desvincular o cliente "${c.nome}" desta galeria?`)) {
+                                                      onUnassociateClient(evento.id, c.id);
+                                                    }
+                                                  }}
+                                                  className="text-stone-350 hover:text-red-650 transition-colors font-bold text-[10px] mt-0.5 flex-shrink-0"
+                                                  title="Desvincular Cliente"
+                                                >
+                                                  ✕
+                                                </button>
+                                                <div className="truncate">
+                                                  <span className="block font-semibold text-stone-850 truncate" title={c.nome}>
+                                                    {c.nome}
+                                                  </span>
+                                                  <span className="text-[9px] text-stone-400 block truncate" title={c.email}>
+                                                    {c.email} {c.telefone && `&bull; ${c.telefone}`}
+                                                  </span>
+                                                </div>
                                               </div>
+
+                                              <span className={`inline-block text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border flex-shrink-0 ${
+                                                statusSel === 'finalizada'
+                                                  ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
+                                                  : statusSel === 'em_progresso'
+                                                  ? 'bg-amber-50 border-amber-250 text-amber-700'
+                                                  : 'bg-stone-100 border-stone-200 text-stone-400'
+                                              }`}>
+                                                {statusSel === 'finalizada' ? 'Finalizada' : statusSel === 'em_progresso' ? 'Em Aberto' : 'Não Iniciou'}
+                                              </span>
                                             </div>
-                                            <span className={`inline-block text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${
-                                              statusSel === 'finalizada'
-                                                ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
-                                                : statusSel === 'em_progresso'
-                                                ? 'bg-amber-50 border-amber-250 text-amber-700'
-                                                : 'bg-stone-100 border-stone-200 text-stone-400'
-                                            }`}>
-                                              {statusSel === 'finalizada' ? 'Finalizada' : statusSel === 'em_progresso' ? 'Em Aberto' : 'Não Iniciou'}
-                                            </span>
-                                          </div>
-                                          
-                                          <div className="flex items-center justify-between text-[9px] border-t border-stone-200/50 pt-1.5 gap-2 flex-wrap">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              {evento.selecao_livre ? (
-                                                <span className="text-stone-500 font-medium">Selecionou: <strong>{selecionadasCount}</strong> fotos</span>
-                                              ) : (
-                                                <div className="flex items-center gap-1 text-stone-500 font-medium flex-wrap">
-                                                  <span>Selecionou: <strong>{selecionadasCount}</strong> de</span>
-                                                  <ClientLimitInput
-                                                    eventId={evento.id}
-                                                    clientId={c.id}
-                                                    initialValue={activeSel?.limite_fotos}
-                                                    placeholder={String(evento.limite_fotos || 'Sem limite')}
-                                                    onUpdate={onUpdateClientSelectionLimit}
-                                                  />
-                                                </div>
-                                              )}
-                                              
-                                              {!evento.selecao_livre && (
-                                                <div className="ml-1 pl-1 border-l border-stone-250 flex items-center">
-                                                  <ClientExtrasCheckbox
-                                                    eventId={evento.id}
-                                                    clientId={c.id}
-                                                    initialValue={activeSel?.permitir_extras !== undefined && activeSel?.permitir_extras !== null ? activeSel.permitir_extras : evento.permitir_extras}
-                                                    onUpdate={onUpdateClientSelectionExtras}
-                                                  />
-                                                </div>
+
+                                            {/* Linha de Limites e Configurações */}
+                                            <div className="flex items-center justify-between text-[9px] border-t border-stone-100 pt-2 gap-2 flex-wrap">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                {evento.selecao_livre ? (
+                                                  <span className="text-stone-600 font-medium">
+                                                    Selecionou: <strong>{selecionadasCount}</strong> fotos (Livre)
+                                                  </span>
+                                                ) : (
+                                                  <div className="flex items-center gap-1 text-stone-600 font-medium flex-wrap">
+                                                    <span>Selecionou: <strong>{selecionadasCount}</strong> de</span>
+                                                    <ClientLimitInput
+                                                      eventId={evento.id}
+                                                      clientId={c.id}
+                                                      initialValue={activeSel?.limite_fotos}
+                                                      placeholder={String(evento.limite_fotos || 'Sem limite')}
+                                                      onUpdate={onUpdateClientSelectionLimit}
+                                                    />
+                                                  </div>
+                                                )}
+
+                                                {!evento.selecao_livre && (
+                                                  <div className="ml-1 pl-1 border-l border-stone-250 flex items-center">
+                                                    <ClientExtrasCheckbox
+                                                      eventId={evento.id}
+                                                      clientId={c.id}
+                                                      initialValue={activeSel?.permitir_extras !== undefined && activeSel?.permitir_extras !== null ? activeSel.permitir_extras : evento.permitir_extras}
+                                                      onUpdate={onUpdateClientSelectionExtras}
+                                                    />
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {statusSel === 'finalizada' && (
+                                                <button
+                                                  onClick={() => {
+                                                    if (confirm(`Deseja reabrir a seleção para o cliente "${c.nome}"?`)) {
+                                                      onReopenEvento(evento.id, c.id);
+                                                    }
+                                                  }}
+                                                  className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0"
+                                                >
+                                                  Reabrir Seleção
+                                                </button>
                                               )}
                                             </div>
-                                            
-                                            {statusSel === 'finalizada' && (
-                                              <button
-                                                onClick={() => {
-                                                  if (confirm(`Deseja reabrir a seleção para o cliente "${c.nome}"?`)) {
-                                                    onReopenEvento(evento.id, c.id);
-                                                  }
-                                                }}
-                                                className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0"
-                                              >
-                                                Reabrir
-                                              </button>
+
+                                            {/* Ações de Seleção do Cliente (Ver Fotos e Exportação) */}
+                                            {selecionadasCount > 0 && (
+                                              <div className="flex items-center gap-1.5 pt-2 border-t border-stone-100 flex-wrap">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setSelectedPhotosModal({ eventId: evento.id, clientId: c.id })}
+                                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-250 text-emerald-800 rounded text-[8.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
+                                                >
+                                                  <span>👁️ Ver Fotos Selecionadas ({selecionadasCount})</span>
+                                                </button>
+                                                
+                                                <button
+                                                  onClick={() => {
+                                                    navigator.clipboard.writeText(lrNames);
+                                                    alert(`Lightroom para ${c.nome} copiado!`);
+                                                  }}
+                                                  className="px-2 py-1 bg-white hover:bg-stone-50 border border-stone-250 rounded text-[8.5px] font-bold text-stone-600 hover:text-stone-900 uppercase tracking-wider transition-colors"
+                                                  title={`Copiar Lightroom:\n${lrNames}`}
+                                                >
+                                                  Lightroom
+                                                </button>
+                                                
+                                                <button
+                                                  onClick={() => {
+                                                    navigator.clipboard.writeText(winNames);
+                                                    alert(`Windows para ${c.nome} copiado!`);
+                                                  }}
+                                                  className="px-2 py-1 bg-white hover:bg-stone-50 border border-stone-250 rounded text-[8.5px] font-bold text-stone-600 hover:text-stone-900 uppercase tracking-wider transition-colors"
+                                                  title={`Copiar Windows:\n${winNames}`}
+                                                >
+                                                  Windows
+                                                </button>
+                                              </div>
                                             )}
                                           </div>
-
-                                          {selecionadasCount > 0 && (
-                                            <div className="flex gap-1 pt-1 border-t border-stone-100/50 mt-1">
-                                              <button
-                                                onClick={() => {
-                                                  navigator.clipboard.writeText(lrNames);
-                                                  alert(`Lightroom para ${c.nome} copiado!`);
-                                                }}
-                                                className="px-1.5 py-0.5 bg-white hover:bg-stone-100 border border-stone-200 rounded text-[7.5px] font-bold text-stone-600 hover:text-stone-850 uppercase tracking-wider transition-colors truncate max-w-[100px]"
-                                                title={`Copiar Lightroom:\n${lrNames}`}
-                                              >
-                                                Lightroom
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  navigator.clipboard.writeText(winNames);
-                                                  alert(`Windows para ${c.nome} copiado!`);
-                                                }}
-                                                className="px-1.5 py-0.5 bg-white hover:bg-stone-100 border border-stone-200 rounded text-[7.5px] font-bold text-stone-600 hover:text-stone-850 uppercase tracking-wider transition-colors truncate max-w-[100px]"
-                                                title={`Copiar Windows:\n${winNames}`}
-                                              >
-                                                Windows
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })
+                                        );
+                                      })}
+                                    </div>
                                   )}
 
+                                  {/* Componente para vincular novo cliente */}
                                   <div className="pt-1">
                                     <InlineAssociateClient
                                       evento={evento}
@@ -1158,130 +1395,175 @@ Qualquer dúvida estou à disposição!`);
                                     />
                                   </div>
                                 </div>
-                              </td>
-                              <td className="py-4 px-6 text-stone-700">
-                                <span className="block font-semibold">{(evento.fotos || []).length} fotos</span>
-                                <span className="text-[10px] text-stone-400 block mt-0.5">Disponibilizadas</span>
-                              </td>
-                              <td className="py-4 px-6 text-stone-600 font-medium">
-                                {evento.selecao_livre ? (
-                                  <span className="text-stone-500 text-xs italic">Seleção Livre</span>
-                                ) : (
-                                  <div>
-                                    <span>{evento.limite_fotos} fotos</span>
-                                    {evento.permitir_extras && (
-                                      <span className="block text-[10px] text-amber-600 font-semibold uppercase tracking-wider mt-0.5">
-                                        Permite Extras {evento.valor_foto_extra && `(R$ ${evento.valor_foto_extra.toFixed(2).replace('.', ',')}/cada)`}
-                                      </span>
+
+                                {/* Coluna 2 (5 cols): Regras da Galeria & Ações Globais */}
+                                <div className="lg:col-span-5 space-y-4">
+                                  {/* Caixa de Regras */}
+                                  <div className="p-3.5 bg-white border border-stone-200/80 rounded-xl space-y-2.5 text-xs">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 block pb-1 border-b border-stone-100">
+                                      Regras e Configurações
+                                    </span>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                      <div>
+                                        <span className="text-stone-400 block text-[9px] uppercase font-bold">Limite Geral:</span>
+                                        <span className="font-semibold text-stone-800">
+                                          {evento.selecao_livre ? 'Seleção Livre' : `${evento.limite_fotos || 25} fotos`}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-stone-400 block text-[9px] uppercase font-bold">Fotos Extras:</span>
+                                        <span className="font-semibold text-stone-800">
+                                          {evento.permitir_extras
+                                            ? (evento.valor_foto_extra ? `R$ ${evento.valor_foto_extra.toFixed(2).replace('.', ',')}/cada` : 'Permitido (Sem custo)')
+                                            : 'Não permitido'}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-stone-400 block text-[9px] uppercase font-bold">Download:</span>
+                                        <span className="font-semibold text-stone-800">
+                                          {evento.permitir_download ? 'Liberado' : 'Bloqueado'}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-stone-400 block text-[9px] uppercase font-bold">Acesso:</span>
+                                        <span className="font-semibold text-stone-800">
+                                          {evento.acesso_restrito ? 'Senha individual' : 'Link Direto'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {evento.categorias_fotos && evento.categorias_fotos.length > 0 && (
+                                      <div className="pt-2 border-t border-stone-100">
+                                        <span className="text-stone-400 block text-[9px] uppercase font-bold mb-1">Abas/Categorias:</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {evento.categorias_fotos.map((cat, idx) => (
+                                            <span key={idx} className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">
+                                              {cat}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Alerta de Extras Pendentes */}
+                                    {computedStatus === 'finalizada' && hasExtras && (
+                                      <div className="pt-2 border-t border-stone-100">
+                                        {evento.pagamento_extras_confirmado ? (
+                                          <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded block text-center">
+                                            ✓ Fotos extras pagas
+                                          </span>
+                                        ) : (
+                                          <div className="p-2 bg-amber-50 border border-amber-250 rounded-lg flex items-center justify-between gap-2">
+                                            <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wider">
+                                              Fotos Extras Pendentes
+                                            </span>
+                                            <button
+                                              onClick={() => onConfirmPayment(evento.id)}
+                                              className="px-2 py-0.5 bg-amber-700 hover:bg-amber-800 text-white rounded text-[8px] font-bold uppercase tracking-widest transition-colors shadow-2xs"
+                                            >
+                                              Confirmar Pgto
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
-                                )}
-                              </td>
-                              <td className="py-4 px-6">
-                                {(() => {
-                                  const selectedCount = (evento.fotos || []).filter((p) => p.selecionada).length;
-                                  const hasExtras = !evento.selecao_livre && evento.limite_fotos !== null && selectedCount > evento.limite_fotos;
-                                  
-                                  return (
-                                    <div className="flex flex-col items-start gap-1">
-                                      <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
-                                        computedStatus === 'finalizada'
-                                          ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
-                                          : computedStatus === 'expirada'
-                                          ? 'bg-rose-50 border-rose-200 text-rose-700'
-                                          : 'bg-amber-50 border-amber-250 text-amber-700'
-                                      }`}>
-                                        {computedStatus === 'finalizada' ? 'Finalizada' :
-                                         computedStatus === 'expirada' ? 'Expirada' : 'Em Aberto'}
-                                      </span>
-                                      
-                                      {computedStatus === 'finalizada' && hasExtras && (
-                                        <div className="mt-1 flex flex-col items-start gap-1.5">
-                                          {evento.pagamento_extras_confirmado ? (
-                                            <span className="text-[8px] font-extrabold uppercase tracking-widest text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                                              Extras Pagas
-                                            </span>
-                                          ) : (
-                                            <>
-                                              <span className="text-[8px] font-extrabold uppercase tracking-widest text-amber-800 bg-amber-50 border border-amber-250 px-2 py-0.5 rounded-md animate-pulse">
-                                                Aguardando Pgto
-                                              </span>
-                                              <button
-                                                onClick={() => onConfirmPayment(evento.id)}
-                                                className="px-2 py-0.5 border border-stone-300 hover:border-stone-900 bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-950 rounded text-[8px] font-bold uppercase tracking-widest transition-all"
-                                              >
-                                                Confirmar
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
+
+                                  {/* Painel de Ações Rápidas da Galeria */}
+                                  <div className="p-3.5 bg-white border border-stone-200/80 rounded-xl space-y-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 block pb-1 border-b border-stone-100">
+                                      Ações da Galeria
+                                    </span>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {/* Ver Fotos Selecionadas da Galeria */}
+                                      {totalSelectedCount > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedPhotosModal({ eventId: evento.id, clientId: null })}
+                                          className="col-span-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-2xs flex items-center justify-center gap-1.5"
+                                        >
+                                          <span>👁️ Ver Fotos Selecionadas ({totalSelectedCount})</span>
+                                        </button>
                                       )}
+
+                                      {/* Gerenciar Fotos */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setPhotosModalEventId(evento.id)}
+                                        className="py-1.5 px-2.5 border border-stone-250 hover:bg-stone-50 text-stone-700 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+                                      >
+                                        <span>📷 Fotos ({photosCount})</span>
+                                      </button>
+
+                                      {/* Compartilhar */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenShareModal(evento)}
+                                        className="py-1.5 px-2.5 border border-stone-250 hover:bg-stone-50 text-stone-700 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+                                      >
+                                        <span>🔗 Compartilhar</span>
+                                      </button>
+
+                                      {/* Editar Configurações */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEditEvento(evento)}
+                                        className="py-1.5 px-2.5 border border-stone-250 hover:bg-stone-50 text-stone-700 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+                                      >
+                                        <span>✏️ Editar</span>
+                                      </button>
+
+                                      {/* Upload */}
+                                      <button
+                                        type="button"
+                                        onClick={() => onSelectEventUpload(evento.id)}
+                                        className="py-1.5 px-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+                                      >
+                                        <span>📤 Upload</span>
+                                      </button>
+
+                                      {/* Reabrir se finalizada */}
+                                      {computedStatus === 'finalizada' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (confirm(`Deseja realmente reabrir a galeria "${evento.titulo}"? O cliente poderá editar a escolha de fotos.`)) {
+                                              onReopenEvento(evento.id);
+                                            }
+                                          }}
+                                          className="col-span-2 py-1.5 px-2.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-[10px] font-bold uppercase tracking-wider transition-colors text-center"
+                                        >
+                                          🔄 Reabrir Galeria Completa
+                                        </button>
+                                      )}
+
+                                      {/* Excluir Galeria */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm(`Deseja realmente excluir a galeria "${evento.titulo}"? Esta ação apagará todas as fotos e seleções associadas.`)) {
+                                            onDeleteEvento(evento.id);
+                                          }
+                                        }}
+                                        className="col-span-2 py-1.5 px-2.5 border border-red-200 hover:bg-red-50 text-red-650 hover:text-red-700 rounded text-[10px] font-bold uppercase tracking-wider transition-colors text-center"
+                                      >
+                                        🗑️ Excluir Galeria
+                                      </button>
                                     </div>
-                                  );
-                                })()}
-                              </td>
-                              <td className="py-4 px-6 text-right">
-                                <div className="flex justify-end gap-2.5">
-                                  {computedStatus === 'finalizada' && (
-                                    <button
-                                      onClick={() => {
-                                        if (confirm(`Deseja realmente reabrir a galeria "${evento.titulo}"? O cliente poderá editar a escolha de fotos.`)) {
-                                          onReopenEvento(evento.id);
-                                        }
-                                      }}
-                                      className="px-3 py-1.5 border border-amber-250 hover:border-amber-500 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded text-xs font-bold uppercase tracking-wider transition-all"
-                                    >
-                                      Reabrir
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleStartEditEvento(evento)}
-                                    className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    onClick={() => setPhotosModalEventId(evento.id)}
-                                    className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
-                                  >
-                                    Fotos
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenShareModal(evento)}
-                                    className="px-3 py-1.5 border border-stone-250 text-stone-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-50 hover:text-stone-900 transition-colors"
-                                  >
-                                    Compartilhar
-                                  </button>
-                                  <button
-                                    onClick={() => onSelectEventUpload(evento.id)}
-                                    className="px-3 py-1.5 bg-stone-100 text-stone-700 rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-200/80 transition-colors"
-                                  >
-                                    Upload
-                                  </button>
-                                  <button
-                                    onClick={() => onSelectEventView(evento.token)}
-                                    className="px-3 py-1.5 bg-stone-900 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-stone-800 transition-colors"
-                                  >
-                                    Ver
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`Deseja realmente excluir a galeria "${evento.titulo}"? Esta ação apagará todas as fotos e seleções associadas.`)) {
-                                        onDeleteEvento(evento.id);
-                                      }
-                                    }}
-                                    className="px-2.5 py-1.5 border border-red-200 hover:border-red-500 hover:bg-red-50 text-red-650 hover:text-red-700 rounded text-xs font-bold uppercase tracking-wider transition-all"
-                                    title="Excluir Galeria"
-                                  >
-                                    Excluir
-                                  </button>
+                                  </div>
                                 </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3402,12 +3684,21 @@ Qualquer dúvida estou à disposição!`);
         const modalEvent = eventos.find(e => e.id === photosModalEventId);
         if (!modalEvent) return null;
 
-        const photos = modalEvent.fotos || [];
+        const allPhotos = modalEvent.fotos || [];
+        const modalSelectedPhotos = getSelectedPhotosForEvent(modalEvent, null);
+        const modalSelectedIds = new Set(modalSelectedPhotos.map(p => p.id));
+
+        const photos = photosModalFilter === 'selected'
+          ? allPhotos.filter(p => modalSelectedIds.has(p.id))
+          : allPhotos;
 
         return (
           <div 
             className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
-            onClick={() => setPhotosModalEventId(null)}
+            onClick={() => {
+              setPhotosModalEventId(null);
+              setPhotosModalFilter('all');
+            }}
           >
             <div 
               className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col animate-scale-in"
@@ -3421,96 +3712,145 @@ Qualquer dúvida estou à disposição!`);
                     Gerenciar Fotos da Galeria
                   </h3>
                   <p className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mt-0.5">
-                    {modalEvent.titulo} &bull; {photos.length} fotos
+                    {modalEvent.titulo} &bull; {allPhotos.length} fotos no total &bull; {modalSelectedPhotos.length} selecionadas
                   </p>
                 </div>
-                <button
-                  onClick={() => setPhotosModalEventId(null)}
-                  className="text-stone-400 hover:text-stone-700 text-xl font-bold px-2 py-1"
-                >
-                  &times;
-                </button>
+
+                <div className="flex items-center gap-3">
+                  {/* Filtro Todas vs Selecionadas */}
+                  <div className="flex bg-stone-200/70 p-0.5 rounded border border-stone-250 text-[9px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPhotosModalFilter('all')}
+                      className={`px-2.5 py-1 rounded transition-all uppercase ${
+                        photosModalFilter === 'all' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      Todas ({allPhotos.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhotosModalFilter('selected')}
+                      className={`px-2.5 py-1 rounded transition-all uppercase ${
+                        photosModalFilter === 'selected' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      Selecionadas ({modalSelectedPhotos.length})
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setPhotosModalEventId(null);
+                      setPhotosModalFilter('all');
+                    }}
+                    className="text-stone-400 hover:text-stone-700 text-xl font-bold px-2 py-1 leading-none"
+                  >
+                    &times;
+                  </button>
+                </div>
               </div>
 
               {/* Photos List Grid */}
               <div className="flex-grow p-6 overflow-y-auto min-h-[300px]">
                 {photos.length === 0 ? (
                   <div className="text-center py-16 text-stone-400 font-serif-editorial">
-                    <p className="text-base">Nenhuma foto enviada para esta galeria ainda.</p>
-                    <p className="text-xs text-stone-400/80 mt-1">Utilize o botão "Upload" no painel principal para enviar as imagens.</p>
+                    <p className="text-base">
+                      {photosModalFilter === 'selected'
+                        ? 'Nenhuma foto selecionada pelos clientes ainda nesta galeria.'
+                        : 'Nenhuma foto enviada para esta galeria ainda.'}
+                    </p>
+                    {photosModalFilter !== 'selected' && (
+                      <p className="text-xs text-stone-400/80 mt-1">Utilize o botão "Upload" no painel principal para enviar as imagens.</p>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {photos.map((photo) => (
-                      <div 
-                        key={photo.id}
-                        className={`group relative bg-white border rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-all ${
-                          photo.destaque ? 'border-amber-400 ring-1 ring-amber-400' : 'border-stone-200'
-                        }`}
-                      >
-                        <div className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative">
-                          <img
-                            src={photo.url_storage}
-                            alt={photo.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                          
-                          {/* Destaque Badge */}
-                          {photo.destaque && (
-                            <div className="absolute top-2 left-2 bg-amber-400 text-stone-950 text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm z-10">
-                              ★ Capa
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex flex-col gap-1.5">
-                          <span className="text-[9px] font-semibold text-stone-600 truncate">{photo.name}</span>
-                          
-                          {/* Seletor de Categoria */}
-                          <div className="flex items-center gap-1">
-                            <span className="text-[8px] uppercase tracking-wider text-stone-400 font-bold">Aba:</span>
-                            <select
-                              value={photo.cena || ''}
-                              onChange={(e) => onUpdatePhotoCategory && onUpdatePhotoCategory(modalEvent.id, photo.id, e.target.value)}
-                              className="flex-grow px-1 py-0.5 border border-stone-200 rounded text-[9px] focus:outline-none bg-white cursor-pointer"
-                            >
-                              <option value="">Sem categoria</option>
-                              {(modalEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']).map((cat, idx) => (
-                                <option key={idx} value={cat}>{cat}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex gap-1 pt-1 border-t border-stone-100/80 justify-between items-center">
-                            {/* Toggle Destaque Button */}
-                            {photo.destaque ? (
-                              <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Capa Ativa</span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => onSetEventCover(modalEvent.id, photo.id)}
-                                className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-amber-250"
-                              >
-                                Definir Capa
-                              </button>
+                    {photos.map((photo) => {
+                      const isSelected = modalSelectedIds.has(photo.id);
+                      return (
+                        <div 
+                          key={photo.id}
+                          className={`group relative bg-white border rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-all ${
+                            isSelected ? 'ring-2 ring-emerald-500 border-emerald-500' :
+                            photo.destaque ? 'border-amber-400 ring-1 ring-amber-400' : 'border-stone-200'
+                          }`}
+                        >
+                          <div 
+                            onClick={() => setPreviewPhotoModal(photo)}
+                            className="aspect-[4/3] w-full bg-stone-50 overflow-hidden relative cursor-pointer"
+                            title="Clique para ampliar"
+                          >
+                            <img
+                              src={photo.url_storage}
+                              alt={photo.name}
+                              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                              loading="lazy"
+                            />
+                            
+                            {/* Destaque Badge */}
+                            {photo.destaque && (
+                              <div className="absolute top-2 left-2 bg-amber-400 text-stone-950 text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm z-10">
+                                ★ Capa
+                              </div>
                             )}
 
-                            {/* Delete Photo Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Deseja realmente excluir a foto "${photo.name}" desta galeria?`)) {
-                                  onDeleteEventPhoto(modalEvent.id, photo.id);
-                                }
-                              }}
-                              className="px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-red-200"
-                            >
-                              Excluir
-                            </button>
+                            {/* Selecionada Badge */}
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm z-10">
+                                ✓ Escolhida
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex flex-col gap-1.5">
+                            <span className="text-[9px] font-semibold text-stone-600 truncate">{photo.name}</span>
+                            
+                            {/* Seletor de Categoria */}
+                            <div className="flex items-center gap-1">
+                              <span className="text-[8px] uppercase tracking-wider text-stone-400 font-bold">Aba:</span>
+                              <select
+                                value={photo.cena || ''}
+                                onChange={(e) => onUpdatePhotoCategory && onUpdatePhotoCategory(modalEvent.id, photo.id, e.target.value)}
+                                className="flex-grow px-1 py-0.5 border border-stone-200 rounded text-[9px] focus:outline-none bg-white cursor-pointer"
+                              >
+                                <option value="">Sem categoria</option>
+                                {(modalEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']).map((cat, idx) => (
+                                  <option key={idx} value={cat}>{cat}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex gap-1 pt-1 border-t border-stone-100/80 justify-between items-center">
+                              {/* Toggle Destaque Button */}
+                              {photo.destaque ? (
+                                <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Capa Ativa</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => onSetEventCover(modalEvent.id, photo.id)}
+                                  className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-amber-250"
+                                >
+                                  Definir Capa
+                                </button>
+                              )}
+
+                              {/* Delete Photo Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`Deseja realmente excluir a foto "${photo.name}" desta galeria?`)) {
+                                    onDeleteEventPhoto(modalEvent.id, photo.id);
+                                  }
+                                }}
+                                className="px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded text-[8px] font-bold uppercase tracking-wider transition-colors border border-red-200"
+                              >
+                                Excluir
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3518,7 +3858,10 @@ Qualquer dúvida estou à disposição!`);
               {/* Footer */}
               <div className="px-6 py-4 border-t border-stone-150 bg-stone-50 flex justify-end">
                 <button
-                  onClick={() => setPhotosModalEventId(null)}
+                  onClick={() => {
+                    setPhotosModalEventId(null);
+                    setPhotosModalFilter('all');
+                  }}
                   className="px-5 py-2 border border-stone-200 text-stone-500 rounded text-xs font-bold uppercase tracking-widest hover:bg-stone-100 transition-colors"
                 >
                   Fechar
@@ -3529,6 +3872,230 @@ Qualquer dúvida estou à disposição!`);
           </div>
         );
       })()}
+
+      {/* Modal Dedicado para Ver Fotos Selecionadas */}
+      {selectedPhotosModal && (() => {
+        const modalEvent = eventos.find(e => e.id === selectedPhotosModal.eventId);
+        if (!modalEvent) return null;
+
+        const filterClientId = selectedPhotosModal.clientId;
+        const filterClient = filterClientId ? clientes.find(c => c.id === filterClientId) : null;
+
+        const selectedPhotos = getSelectedPhotosForEvent(modalEvent, filterClientId);
+
+        // Clientes que têm seleções nesta galeria (para as abas de filtro)
+        const clientsWithSelections = (modalEvent.clientes_permitidos || [])
+          .concat(modalEvent.id_cliente ? [modalEvent.id_cliente] : [])
+          .filter((cid, idx, arr) => arr.indexOf(cid) === idx)
+          .map(cid => {
+            const c = clientes.find(client => client.id === cid) || { id: cid, nome: 'Cliente' };
+            const selCount = getSelectedPhotosForEvent(modalEvent, cid).length;
+            return { client: c, count: selCount };
+          })
+          .filter(item => item.count > 0);
+
+        const lrNames = selectedPhotos.map(f => (f.name || '').replace(/\.[^/.]+$/, "")).join(', ');
+        const winNames = selectedPhotos.map(f => f.name || '').join(' OR ');
+
+        return (
+          <div 
+            className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setSelectedPhotosModal(null)}
+          >
+            <div 
+              className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-stone-150 flex items-center justify-between bg-stone-50">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                      ⭐ Fotos Selecionadas
+                    </span>
+                    <h3 className="font-serif-editorial text-lg text-stone-900 font-medium">
+                      {modalEvent.titulo}
+                    </h3>
+                  </div>
+                  <p className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mt-1">
+                    {filterClient ? `Cliente: ${filterClient.nome} (${filterClient.email})` : 'Todos os Clientes'} &bull; {selectedPhotos.length} fotos escolhidas
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {selectedPhotos.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(lrNames);
+                          alert("Lista Lightroom copiada para a área de transferência!");
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-stone-100 border border-stone-250 text-stone-700 rounded text-[9px] font-bold uppercase tracking-wider transition-colors shadow-2xs"
+                        title="Copiar lista de nomes para Lightroom"
+                      >
+                        📋 Lightroom
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(winNames);
+                          alert("Lista Windows copiada para a área de transferência!");
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-stone-100 border border-stone-250 text-stone-700 rounded text-[9px] font-bold uppercase tracking-wider transition-colors shadow-2xs"
+                        title="Copiar lista de nomes para pesquisa no Windows"
+                      >
+                        📋 Windows
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setSelectedPhotosModal(null)}
+                    className="text-stone-400 hover:text-stone-700 text-xl font-bold px-2 py-1 leading-none ml-2"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+
+              {/* Abas por Cliente (se houver mais de 1 cliente com fotos selecionadas) */}
+              {clientsWithSelections.length > 1 && (
+                <div className="px-6 py-2.5 bg-stone-100/60 border-b border-stone-150 flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400 flex-shrink-0">
+                    Filtrar por Cliente:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotosModal({ eventId: modalEvent.id, clientId: null })}
+                    className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                      filterClientId === null ? 'bg-stone-900 text-white shadow-2xs' : 'bg-white text-stone-600 hover:bg-stone-200 border border-stone-200'
+                    }`}
+                  >
+                    Todos os Clientes ({getSelectedPhotosForEvent(modalEvent, null).length})
+                  </button>
+                  {clientsWithSelections.map(item => (
+                    <button
+                      key={item.client.id}
+                      type="button"
+                      onClick={() => setSelectedPhotosModal({ eventId: modalEvent.id, clientId: item.client.id })}
+                      className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                        filterClientId === item.client.id ? 'bg-stone-900 text-white shadow-2xs' : 'bg-white text-stone-600 hover:bg-stone-200 border border-stone-200'
+                      }`}
+                    >
+                      {item.client.nome} ({item.count})
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Photos Grid */}
+              <div className="flex-grow p-6 overflow-y-auto min-h-[300px]">
+                {selectedPhotos.length === 0 ? (
+                  <div className="text-center py-16 text-stone-400 font-serif-editorial">
+                    <p className="text-base">Nenhuma foto selecionada {filterClient ? `por ${filterClient.nome}` : 'nesta galeria'} ainda.</p>
+                    <p className="text-xs text-stone-400/80 mt-1">Quando o cliente selecionar e favoritar fotos, elas aparecerão aqui instantaneamente.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                    {selectedPhotos.map((photo, index) => (
+                      <div
+                        key={photo.id}
+                        className="group relative bg-white border border-stone-200 rounded-lg overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col"
+                      >
+                        <div 
+                          onClick={() => setPreviewPhotoModal(photo)}
+                          className="aspect-[4/3] w-full bg-stone-100 overflow-hidden relative cursor-pointer"
+                        >
+                          <img
+                            src={photo.url_storage}
+                            alt={photo.name}
+                            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="bg-black/70 text-white text-[9px] px-2 py-1 rounded font-bold uppercase tracking-wider backdrop-blur-xs">
+                              🔍 Ampliar
+                            </span>
+                          </div>
+                          <div className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[8px] font-mono px-1.5 py-0.5 rounded backdrop-blur-xs">
+                            #{index + 1}
+                          </div>
+                        </div>
+
+                        <div className="p-2 border-t border-stone-100 bg-stone-50/50 flex flex-col gap-1">
+                          <span className="text-[9px] font-semibold text-stone-700 truncate" title={photo.name}>
+                            {photo.name}
+                          </span>
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
+                            {photo.selectedByClients && photo.selectedByClients.length > 0 && (
+                              <div className="flex gap-1 flex-wrap">
+                                {photo.selectedByClients.map(c => (
+                                  <span key={c.id} className="text-[7.5px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded truncate max-w-[100px]" title={`Selecionado por ${c.nome}`}>
+                                    👤 {c.nome}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {photo.cena && (
+                              <span className="text-[7.5px] font-bold uppercase tracking-wider text-stone-500 bg-stone-100 px-1 py-0.2 rounded">
+                                {photo.cena}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-stone-150 bg-stone-50 flex items-center justify-between">
+                <span className="text-xs text-stone-500 font-medium">
+                  Total exibido: <strong className="text-stone-900">{selectedPhotos.length} fotos</strong>
+                </span>
+                <button
+                  onClick={() => setSelectedPhotosModal(null)}
+                  className="px-5 py-2 border border-stone-200 text-stone-600 rounded text-xs font-bold uppercase tracking-widest hover:bg-stone-100 transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Preview Ampliado em Alta Resolução (Lightbox) */}
+      {previewPhotoModal && (
+        <div 
+          className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewPhotoModal(null)}
+        >
+          <div 
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreviewPhotoModal(null)}
+              className="absolute -top-10 right-0 text-white hover:text-stone-300 text-3xl font-bold p-1 focus:outline-none"
+              title="Fechar (ESC)"
+            >
+              &times;
+            </button>
+            <img
+              src={previewPhotoModal.url_storage}
+              alt={previewPhotoModal.name}
+              className="max-w-full max-h-[82vh] object-contain rounded-lg shadow-2xl"
+            />
+            <div className="mt-3 text-center">
+              <span className="text-white text-xs font-semibold tracking-wider font-mono bg-black/40 px-3 py-1 rounded-full">
+                {previewPhotoModal.name}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

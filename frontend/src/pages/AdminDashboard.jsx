@@ -70,7 +70,9 @@ export default function AdminDashboard({
   onUpdateVendor,
   onDeleteVendor,
   onAddCategoryFornecedor,
-  onDeleteCategoryFornecedor
+  onDeleteCategoryFornecedor,
+  categoriasGaleria = ['Formaturas', 'Casamentos', 'Ensaios', 'Infantil', 'Corporativo', 'Outros'],
+  onSaveCategoriasGaleria
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
@@ -129,7 +131,7 @@ export default function AdminDashboard({
   const [marcaDaguaEstilo, setMarcaDaguaEstilo] = useState('leve'); // 'leve' | 'media' | 'pesada'
 
   // Categoria de Galeria & Download
-  const [tipoGaleria, setTipoGaleria] = useState('ensaio');
+  const [tipoGaleria, setTipoGaleria] = useState(categoriasGaleria[0] || 'Ensaios');
   const [permitirDownload, setPermitirDownload] = useState(false);
   const [acessoRestrito, setAcessoRestrito] = useState(false);
   const [permitirAutoCadastro, setPermitirAutoCadastro] = useState(true);
@@ -429,6 +431,79 @@ export default function AdminDashboard({
   };
 
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'aberta' | 'expirada' | 'concluida'
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showGalleryCategoryModal, setShowGalleryCategoryModal] = useState(false);
+  const [newGalleryCategoryInput, setNewGalleryCategoryInput] = useState('');
+  const [editingGalleryCategory, setEditingGalleryCategory] = useState(null); // { original: '', current: '' }
+
+  const getGalleryCategoryLabel = (tipo) => {
+    if (!tipo) return 'Ensaios';
+    const lower = String(tipo).toLowerCase().trim();
+    if (lower === 'casamento' || lower === 'casamentos') return 'Casamentos';
+    if (lower === 'formatura' || lower === 'formaturas') return 'Formaturas';
+    if (lower === 'ensaio' || lower === 'ensaios') return 'Ensaios';
+    if (lower === 'festa_infantil' || lower === 'infantil') return 'Infantil';
+    if (lower === 'evento_corporativo' || lower === 'corporativo') return 'Corporativo';
+    if (lower === 'outros' || lower === 'outro') return 'Outros';
+    const found = categoriasGaleria.find(c => c.toLowerCase() === lower);
+    if (found) return found;
+    return tipo;
+  };
+
+  const matchesGalleryCategory = (evento, filterCat) => {
+    if (!filterCat || filterCat === 'all') return true;
+    const eventCatLabel = getGalleryCategoryLabel(evento.tipo_galeria).toLowerCase();
+    const targetCatLabel = filterCat.toLowerCase();
+    return eventCatLabel === targetCatLabel;
+  };
+
+  const handleAddGalleryCategory = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = newGalleryCategoryInput.trim();
+    if (!trimmed) return;
+    if (categoriasGaleria.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+      alert('Esta categoria já existe!');
+      return;
+    }
+    const updated = [...categoriasGaleria, trimmed];
+    if (onSaveCategoriasGaleria) {
+      await onSaveCategoriasGaleria(updated);
+    }
+    setNewGalleryCategoryInput('');
+  };
+
+  const handleEditGalleryCategory = async (originalName, newName) => {
+    const trimmed = (newName || '').trim();
+    if (!trimmed || trimmed.toLowerCase() === originalName.toLowerCase()) {
+      setEditingGalleryCategory(null);
+      return;
+    }
+    if (categoriasGaleria.some(c => c.toLowerCase() === trimmed.toLowerCase() && c.toLowerCase() !== originalName.toLowerCase())) {
+      alert('Já existe uma categoria com este nome!');
+      return;
+    }
+    const updated = categoriasGaleria.map(c => c.toLowerCase() === originalName.toLowerCase() ? trimmed : c);
+    if (onSaveCategoriasGaleria) {
+      await onSaveCategoriasGaleria(updated);
+    }
+    if (categoryFilter.toLowerCase() === originalName.toLowerCase()) {
+      setCategoryFilter(trimmed);
+    }
+    setEditingGalleryCategory(null);
+  };
+
+  const handleDeleteGalleryCategory = async (categoryToDelete) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a categoria "${categoryToDelete}"? As galerias existentes não serão apagadas.`)) {
+      return;
+    }
+    const updated = categoriasGaleria.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase());
+    if (onSaveCategoriasGaleria) {
+      await onSaveCategoriasGaleria(updated);
+    }
+    if (categoryFilter.toLowerCase() === categoryToDelete.toLowerCase()) {
+      setCategoryFilter('all');
+    }
+  };
 
   // Handlers
   const handleClientSubmit = (e) => {
@@ -552,7 +627,7 @@ export default function AdminDashboard({
     setMarcaDaguaMiniaturas(true);
     setMarcaDaguaExpandida(true);
     setMarcaDaguaEstilo('leve');
-    setTipoGaleria('ensaio');
+    setTipoGaleria(categoriasGaleria[0] || 'Ensaios');
     setPermitirDownload(true);
     setAcessoRestrito(false);
     setPermitirAutoCadastro(true);
@@ -582,7 +657,7 @@ export default function AdminDashboard({
     setMarcaDaguaMiniaturas(evento.marca_dagua_miniaturas !== undefined ? !!evento.marca_dagua_miniaturas : true);
     setMarcaDaguaExpandida(evento.marca_dagua_expandida !== undefined ? !!evento.marca_dagua_expandida : true);
     setMarcaDaguaEstilo(evento.marca_dagua_estilo || 'leve');
-    setTipoGaleria(evento.tipo_galeria || 'ensaio');
+    setTipoGaleria(getGalleryCategoryLabel(evento.tipo_galeria));
     setPermitirDownload(evento.permitir_download !== undefined ? !!evento.permitir_download : false);
     setAcessoRestrito(!!evento.acesso_restrito);
     setPermitirAutoCadastro(evento.permitir_auto_cadastro !== undefined ? !!evento.permitir_auto_cadastro : true);
@@ -968,15 +1043,81 @@ Qualquer dúvida estou à disposição!`);
           ) : (() => {
             const filteredEventos = eventos.filter((evento) => {
               const computedStatus = getEventStatus(evento);
-              if (statusFilter === 'all') return true;
-              if (statusFilter === 'aberta') return computedStatus === 'ativa';
-              if (statusFilter === 'concluida') return computedStatus === 'finalizada';
-              if (statusFilter === 'expirada') return computedStatus === 'expirada';
-              return true;
+              let statusMatch = true;
+              if (statusFilter === 'aberta') statusMatch = (computedStatus === 'ativa');
+              else if (statusFilter === 'concluida') statusMatch = (computedStatus === 'finalizada');
+              else if (statusFilter === 'expirada') statusMatch = (computedStatus === 'expirada');
+
+              const categoryMatch = matchesGalleryCategory(evento, categoryFilter);
+
+              return statusMatch && categoryMatch;
             });
+
+            const eventosNaCategoria = categoryFilter === 'all'
+              ? eventos
+              : eventos.filter(e => matchesGalleryCategory(e, categoryFilter));
 
             return (
               <div className="space-y-4">
+                {/* Filtros de Categoria Dinâmica */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-stone-50/70 border border-stone-200/80 rounded-xl">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 flex items-center gap-1.5 mr-1">
+                      <svg className="w-3.5 h-3.5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      Categorias:
+                    </span>
+                    <div className="flex bg-stone-100 p-0.5 rounded-lg border border-stone-200/60 text-[9px] font-bold flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryFilter('all')}
+                        className={`px-3 py-1 rounded transition-all uppercase ${
+                          categoryFilter === 'all'
+                            ? 'bg-stone-900 text-white shadow-sm'
+                            : 'text-stone-500 hover:text-stone-800'
+                        }`}
+                      >
+                        Todas ({eventos.length})
+                      </button>
+                      {categoriasGaleria.map((cat) => {
+                        const count = eventos.filter((e) => matchesGalleryCategory(e, cat)).length;
+                        const isActive = categoryFilter.toLowerCase() === cat.toLowerCase();
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setCategoryFilter(isActive ? 'all' : cat)}
+                            className={`px-2.5 py-1 rounded transition-all uppercase flex items-center gap-1.5 ${
+                              isActive
+                                ? 'bg-stone-900 text-white shadow-sm'
+                                : 'text-stone-500 hover:text-stone-800'
+                            }`}
+                          >
+                            <span>{cat}</span>
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${isActive ? 'bg-stone-800 text-stone-200' : 'bg-stone-200/80 text-stone-600'}`}>
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowGalleryCategoryModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-stone-700 bg-white border border-stone-250 rounded-lg hover:bg-stone-50 hover:border-stone-400 transition-colors shadow-2xs self-start sm:self-auto flex-shrink-0 cursor-pointer"
+                    title="Adicionar, editar ou apagar categorias de galerias"
+                  >
+                    <svg className="w-3.5 h-3.5 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Gerenciar Categorias
+                  </button>
+                </div>
+
                 {/* Filtros de Status & Controles de Expansão */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-stone-50/50 border border-stone-200/80 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -1010,7 +1151,7 @@ Qualquer dúvida estou à disposição!`);
                         statusFilter === 'all' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
                       }`}
                     >
-                      Todas ({eventos.length})
+                      Todas ({eventosNaCategoria.length})
                     </button>
                     <button
                       type="button"
@@ -1019,7 +1160,7 @@ Qualquer dúvida estou à disposição!`);
                         statusFilter === 'aberta' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
                       }`}
                     >
-                      Abertas ({eventos.filter(e => getEventStatus(e) === 'ativa').length})
+                      Abertas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'ativa').length})
                     </button>
                     <button
                       type="button"
@@ -1028,7 +1169,7 @@ Qualquer dúvida estou à disposição!`);
                         statusFilter === 'expirada' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
                       }`}
                     >
-                      Expiradas ({eventos.filter(e => getEventStatus(e) === 'expirada').length})
+                      Expiradas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'expirada').length})
                     </button>
                     <button
                       type="button"
@@ -1037,7 +1178,7 @@ Qualquer dúvida estou à disposição!`);
                         statusFilter === 'concluida' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
                       }`}
                     >
-                      Concluídas ({eventos.filter(e => getEventStatus(e) === 'finalizada').length})
+                      Concluídas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'finalizada').length})
                     </button>
                   </div>
                 </div>
@@ -1113,11 +1254,7 @@ Qualquer dúvida estou à disposição!`);
                                   </h4>
 
                                   <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200/50">
-                                    {evento.tipo_galeria === 'festa_infantil' ? 'Festa Infantil' :
-                                     evento.tipo_galeria === 'evento_corporativo' ? 'Corporativo' :
-                                     evento.tipo_galeria === 'ensaio' ? 'Ensaio' :
-                                     evento.tipo_galeria === 'casamento' ? 'Casamento' :
-                                     evento.tipo_galeria || 'Ensaio'}
+                                    {getGalleryCategoryLabel(evento.tipo_galeria)}
                                   </span>
 
                                   <span className={`text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
@@ -1757,20 +1894,32 @@ Qualquer dúvida estou à disposição!`);
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                Tipo de Galeria
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                  Tipo de Galeria
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowGalleryCategoryModal(true)}
+                  className="text-[9px] text-stone-500 hover:text-stone-900 font-bold uppercase tracking-wider hover:underline cursor-pointer"
+                >
+                  + Gerenciar
+                </button>
+              </div>
               <select
                 required
                 value={tipoGaleria}
                 onChange={(e) => setTipoGaleria(e.target.value)}
                 className="w-full px-4 py-2 border border-stone-200 rounded text-sm focus:outline-none focus:border-stone-900 bg-white cursor-pointer"
               >
-                <option value="ensaio">Ensaio</option>
-                <option value="casamento">Casamento</option>
-                <option value="festa_infantil">Festa Infantil</option>
-                <option value="evento_corporativo">Evento Corporativo</option>
-                <option value="outros">Outros</option>
+                {tipoGaleria && !categoriasGaleria.some(c => c.toLowerCase() === String(tipoGaleria).toLowerCase()) && (
+                  <option value={tipoGaleria}>{tipoGaleria}</option>
+                )}
+                {categoriasGaleria.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -2234,7 +2383,7 @@ Qualquer dúvida estou à disposição!`);
                 setMarcaDaguaMiniaturas(true);
                 setMarcaDaguaExpandida(true);
                 setMarcaDaguaEstilo('leve');
-                setTipoGaleria('ensaio');
+                setTipoGaleria(categoriasGaleria[0] || 'Ensaios');
                 setPermitirDownload(true);
                 setAcessoRestrito(false);
                 setActiveSubTab('overview');
@@ -4065,6 +4214,176 @@ Qualquer dúvida estou à disposição!`);
           </div>
         );
       })()}
+
+      {/* Preview Ampliado em Alta Resolução (Lightbox) */}
+      {/* Modal de Gerenciamento de Categorias de Galeria */}
+      {showGalleryCategoryModal && (
+        <div 
+          className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => {
+            setShowGalleryCategoryModal(false);
+            setEditingGalleryCategory(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-stone-150 flex items-center justify-between bg-stone-50/50">
+              <div>
+                <h3 className="font-serif-editorial text-lg text-stone-900 font-normal">
+                  Gerenciar Categorias
+                </h3>
+                <p className="text-[10px] text-stone-400 uppercase tracking-widest mt-0.5">
+                  Categorias de Galerias de Fotos
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGalleryCategoryModal(false);
+                  setEditingGalleryCategory(null);
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-lg"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+              {/* Form de Inserção de Nova Categoria */}
+              <form onSubmit={handleAddGalleryCategory} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Nova categoria (Ex: Gestantes...)"
+                  value={newGalleryCategoryInput}
+                  onChange={(e) => setNewGalleryCategoryInput(e.target.value)}
+                  className="flex-grow px-3 py-2 border border-stone-250 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-white placeholder:text-stone-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!newGalleryCategoryInput.trim()}
+                  className="px-3.5 py-2 bg-stone-900 hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[9px] font-bold uppercase tracking-widest rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  + Inserir
+                </button>
+              </form>
+
+              {/* Lista de Categorias Cadastradas */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block mb-1.5">
+                  Categorias Ativas ({categoriasGaleria.length})
+                </span>
+
+                {categoriasGaleria.length === 0 ? (
+                  <div className="text-center py-6 border border-dashed border-stone-200 rounded-lg text-stone-400 text-xs font-serif-editorial">
+                    Nenhuma categoria cadastrada.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {categoriasGaleria.map((cat) => {
+                      const count = eventos.filter((e) => matchesGalleryCategory(e, cat)).length;
+                      const isEditing = editingGalleryCategory?.original === cat;
+
+                      return (
+                        <div
+                          key={cat}
+                          className="flex items-center justify-between p-2.5 bg-stone-50/70 border border-stone-200/80 rounded-xl hover:border-stone-300 transition-colors gap-2"
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5 flex-grow">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingGalleryCategory.current}
+                                onChange={(e) =>
+                                  setEditingGalleryCategory({ ...editingGalleryCategory, current: e.target.value })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleEditGalleryCategory(cat, editingGalleryCategory.current);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingGalleryCategory(null);
+                                  }
+                                }}
+                                className="flex-grow px-2 py-1 text-xs border border-stone-300 rounded focus:outline-none focus:border-stone-900 bg-white"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleEditGalleryCategory(cat, editingGalleryCategory.current)}
+                                className="px-2 py-1 bg-stone-900 text-white rounded text-[8px] font-bold uppercase tracking-wider hover:bg-stone-800 cursor-pointer"
+                              >
+                                Salvar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingGalleryCategory(null)}
+                                className="px-2 py-1 border border-stone-200 text-stone-600 rounded text-[8px] font-bold uppercase tracking-wider hover:bg-stone-100 cursor-pointer"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-stone-800 truncate">
+                                  {cat}
+                                </span>
+                                <span className="text-[9px] font-mono text-stone-400 bg-stone-100 border border-stone-200/50 px-1.5 py-0.2 rounded whitespace-nowrap">
+                                  {count} {count === 1 ? 'galeria' : 'galerias'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingGalleryCategory({ original: cat, current: cat })}
+                                  className="p-1.5 text-stone-400 hover:text-stone-800 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-stone-200 cursor-pointer"
+                                  title="Editar / Renomear"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteGalleryCategory(cat)}
+                                  className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200 cursor-pointer"
+                                  title="Excluir categoria"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-stone-150 bg-stone-50/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGalleryCategoryModal(false);
+                  setEditingGalleryCategory(null);
+                }}
+                className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-stone-800 transition-colors cursor-pointer"
+              >
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Preview Ampliado em Alta Resolução (Lightbox) */}
       {previewPhotoModal && (

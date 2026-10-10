@@ -336,9 +336,9 @@ export default function PhotoVirtualGrid({
       case 'festa_infantil': return 'Festa Infantil';
       case 'evento_corporativo': return 'Evento Corporativo';
       case 'outros': return 'Galeria Exclusiva';
-      case 'ensaio':
+      case 'ensaio': return 'Ensaio Fotográfico';
       default:
-        return 'Ensaio Fotográfico';
+        return tipoGaleria || 'Ensaio Fotográfico';
     }
   }, [tipoGaleria]);
 

@@ -142,6 +142,14 @@ export default function App() {
   const [templateMensagem, setTemplateMensagem] = useState(
     "Oi, {nome}. Tudo bem?\n\nA galeria {titulo} já está disponível.\nO prazo para a seleção das fotos é dia {prazo}.\n\n{observacoes}Para acessar a galeria use os dados abaixo:\n\nLink de acesso: {link}\nE-mail: {email}\nSenha: {senha}\n\nQualquer dúvida estou à disposição!"
   );
+  const [categoriasGaleria, setCategoriasGaleria] = useState([
+    'Formaturas',
+    'Casamentos',
+    'Ensaios',
+    'Infantil',
+    'Corporativo',
+    'Outros'
+  ]);
 
   // Estados de Autenticação do Administrador (Firebase Auth)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -229,10 +237,22 @@ export default function App() {
       console.error("[FIREBASE] Erro ao sincronizar template de mensagem:", error);
     });
 
+    const defaultCategoriasGaleria = ['Formaturas', 'Casamentos', 'Ensaios', 'Infantil', 'Corporativo', 'Outros'];
+    const unsubscribeCategoriasGaleria = onSnapshot(doc(db, "configuracoes", "categorias_galeria"), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().categorias) {
+        setCategoriasGaleria(docSnap.data().categorias);
+      } else {
+        setCategoriasGaleria(defaultCategoriasGaleria);
+      }
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar categorias de galeria:", error);
+    });
+
     return () => {
       unsubscribePortfolioDestaques();
       unsubscribeContato();
       unsubscribeTemplate();
+      unsubscribeCategoriasGaleria();
     };
   }, [db, loadFullPortfolio]);
 
@@ -1388,6 +1408,16 @@ export default function App() {
       await setDoc(doc(db, "configuracoes", "template_mensagem"), { texto: novoTexto });
     } else {
       setTemplateMensagem(novoTexto);
+    }
+  };
+
+  // Callback para salvar a lista dinâmica de categorias de galeria
+  const handleSaveCategoriasGaleria = async (novasCategorias) => {
+    console.log("[FIREBASE] Salvando categorias de galeria:", novasCategorias);
+    if (db) {
+      await setDoc(doc(db, "configuracoes", "categorias_galeria"), { categorias: novasCategorias });
+    } else {
+      setCategoriasGaleria(novasCategorias);
     }
   };
 
@@ -2571,6 +2601,8 @@ export default function App() {
               onDeleteVendor={handleDeleteVendor}
               onAddCategoryFornecedor={handleAddCategoryFornecedor}
               onDeleteCategoryFornecedor={handleDeleteCategoryFornecedor}
+              categoriasGaleria={categoriasGaleria}
+              onSaveCategoriasGaleria={handleSaveCategoriasGaleria}
             />
           )
         )}

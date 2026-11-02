@@ -28,6 +28,19 @@ const getEventStatus = (evento) => {
   return 'ativa';
 };
 
+const DEFAULT_SYSTEM_TEMPLATE = `Oi, {nome}. Tudo bem?
+
+A galeria {titulo} já está disponível.
+O prazo para a seleção das fotos é dia {prazo}.
+
+{observacoes}Para acessar a galeria use os dados abaixo:
+
+Link de acesso: {link}
+E-mail: {email}
+Senha: {senha}
+
+Qualquer dúvida estou à disposição!`;
+
 export default function AdminDashboard({
   clientes = [],
   eventos = [],
@@ -146,7 +159,13 @@ export default function AdminDashboard({
   const [selectedPhotosModal, setSelectedPhotosModal] = useState(null); // { eventId, clientId: string | null }
   const [previewPhotoModal, setPreviewPhotoModal] = useState(null); // photo object for enlarged preview
   const [expandedEventIds, setExpandedEventIds] = useState(new Set());
-  const [tempTemplate, setTempTemplate] = useState('');
+  const [tempTemplate, setTempTemplate] = useState(templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
+
+  useEffect(() => {
+    if (templateMensagem) {
+      setTempTemplate(templateMensagem);
+    }
+  }, [templateMensagem]);
 
   const toggleExpandEvent = (eventId) => {
     setExpandedEventIds((prev) => {
@@ -687,7 +706,7 @@ export default function AdminDashboard({
   const [sharingEvent, setSharingEvent] = useState(null);
   const [sharingClient, setSharingClient] = useState(null);
   const [shareForm, setShareForm] = useState({
-    observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
+    observacoes: '',
     emailSuporte: 'wilkson@gmail.com',
     nomeFotografo: 'Wilkson Albuquerque Carvalho',
     prazo: '',
@@ -715,20 +734,9 @@ export default function AdminDashboard({
     const dateFormatted = formatEventDate(form.prazo || event.data);
     const senhaText = event.acesso_restrito ? (client?.senha || '123456') : '(Acesso direto por link)';
     
-    let template = customTemplate !== null ? customTemplate : (templateMensagem || `Oi, {nome}. Tudo bem?
+    let template = customTemplate !== null ? customTemplate : (templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
 
-A galeria {titulo} já está disponível.
-O prazo para a seleção das fotos é dia {prazo}.
-
-{observacoes}Para acessar a galeria use os dados abaixo:
-
-Link de acesso: {link}
-E-mail: {email}
-Senha: {senha}
-
-Qualquer dúvida estou à disposição!`);
-
-    let obsText = form.observacoes ? `${form.observacoes}\n` : '';
+    let obsText = form.observacoes?.trim() ? `${form.observacoes.trim()}\n\n` : '';
 
     template = template
       .replace(/{nome}/g, client?.nome || '')
@@ -765,10 +773,10 @@ Qualquer dúvida estou à disposição!`);
     setSharingEvent(evento);
     setSharingClient(selectedClient);
     setIsCustomMessageEdited(false);
-    setTempTemplate(templateMensagem || '');
+    setTempTemplate(templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
     
     const initialForm = {
-      observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
+      observacoes: '',
       emailSuporte: 'wilkson@gmail.com',
       nomeFotografo: 'Wilkson Albuquerque Carvalho',
       prazo: evento.data || '',
@@ -898,6 +906,19 @@ Qualquer dúvida estou à disposição!`);
                 }`}
               >
                 + Nova Galeria
+              </button>
+              <button
+                onClick={() => {
+                  setTempTemplate(templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
+                  setActiveSubTab('template');
+                }}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded ${
+                  activeSubTab === 'template'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-stone-100 hover:bg-stone-200/70 text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                ⚙️ Mensagem Padrão
               </button>
             </>
           ) : (
@@ -1500,7 +1521,7 @@ Qualquer dúvida estou à disposição!`);
                                                   type="button"
                                                   onClick={() => {
                                                     const initialForm = {
-                                                      observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
+                                                      observacoes: '',
                                                       emailSuporte: 'wilkson@gmail.com',
                                                       nomeFotografo: 'Wilkson Albuquerque Carvalho',
                                                       prazo: evento.data || '',
@@ -2457,6 +2478,146 @@ Qualquer dúvida estou à disposição!`);
             </button>
           </div>
         </form>
+      )}
+
+      {/* Sub-tab: Configuração de Mensagem Padrão */}
+      {activeSubTab === 'template' && (
+        <div className="animate-scale-in space-y-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-stone-150 pb-4 gap-4">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Comunicação com Clientes</span>
+              <h3 className="font-serif-editorial text-lg text-stone-900 mt-0.5">Mensagem Padrão de Envio</h3>
+              <p className="text-[11px] text-stone-500 mt-1">
+                Configure o texto padrão utilizado ao compartilhar galerias de prova por WhatsApp ou e-mail.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTempTemplate(DEFAULT_SYSTEM_TEMPLATE)}
+                className="px-3.5 py-2 border border-stone-200 text-stone-600 hover:text-stone-900 hover:bg-stone-50 rounded text-[9.5px] font-bold uppercase tracking-widest transition-all"
+                title="Restaurar o modelo original de fábrica"
+              >
+                Restaurar Padrão
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onSaveTemplateMensagem) {
+                    try {
+                      await onSaveTemplateMensagem(tempTemplate);
+                      alert("✓ Modelo de mensagem padrão salvo com sucesso na nuvem!");
+                    } catch (err) {
+                      alert("Erro ao salvar modelo: " + err.message);
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-[9.5px] font-bold uppercase tracking-widest transition-all shadow-sm flex items-center gap-1.5"
+              >
+                <span>💾 Salvar Mensagem Padrão</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Editor de Texto e Tags */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="bg-white border border-stone-200 rounded-xl p-5 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                    Texto do Modelo (Template)
+                  </label>
+                  <span className="text-[9px] text-stone-400 font-medium">
+                    Salvo no Firebase e sincronizado
+                  </span>
+                </div>
+
+                <textarea
+                  rows="12"
+                  value={tempTemplate}
+                  onChange={(e) => setTempTemplate(e.target.value)}
+                  placeholder="Escreva a mensagem aqui..."
+                  className="w-full p-3.5 border border-stone-250 rounded-lg text-xs font-mono focus:outline-none focus:border-stone-900 bg-stone-50/20 resize-y leading-relaxed text-stone-800"
+                />
+
+                {/* Tags Disponíveis */}
+                <div>
+                  <span className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-2">
+                    Clique em uma tag para inseri-la no modelo:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { tag: '{nome}', desc: 'Nome do Cliente' },
+                      { tag: '{titulo}', desc: 'Título da Galeria' },
+                      { tag: '{prazo}', desc: 'Data Limite' },
+                      { tag: '{link}', desc: 'Link de Acesso Individual' },
+                      { tag: '{email}', desc: 'E-mail do Cliente' },
+                      { tag: '{senha}', desc: 'Senha de Acesso' },
+                      { tag: '{observacoes}', desc: 'Observações Opcionais' }
+                    ].map(({ tag, desc }) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setTempTemplate(prev => prev + (prev.endsWith('\n') || prev.endsWith(' ') || prev.length === 0 ? '' : ' ') + tag);
+                        }}
+                        className="group flex items-center gap-1 px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200/80 border border-stone-200 rounded text-left transition-all"
+                        title={`Inserir ${tag} (${desc})`}
+                      >
+                        <code className="text-stone-900 font-mono text-[10px] font-bold">{tag}</code>
+                        <span className="text-[9px] text-stone-500 group-hover:text-stone-700">({desc})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-stone-50 border border-stone-200/60 rounded-lg text-[10px] text-stone-500 space-y-1">
+                  <p className="font-bold uppercase tracking-wider text-[8px] text-stone-600">💡 Links Independentes de Clientes:</p>
+                  <p>
+                    A tag <code className="text-stone-800 font-mono font-bold">{`{link}`}</code> gera o link exclusivo com os parâmetros do cliente selecionado, garantindo acesso direto e independente aos clientes vinculados à mesma galeria.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Preview estilo WhatsApp */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="bg-[#EFEAE2] border border-stone-300 rounded-xl p-4 shadow-sm flex flex-col h-full min-h-[420px]">
+                <div className="flex items-center gap-2 pb-3 mb-3 border-b border-stone-300/60">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-700">
+                    Pré-visualização do Cliente
+                  </span>
+                  <span className="ml-auto text-[9px] font-semibold text-stone-500 bg-white/70 px-2 py-0.5 rounded border border-stone-200">
+                    Simulação WhatsApp
+                  </span>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-start">
+                  <div className="bg-white rounded-lg p-4 shadow-xs border border-stone-200/50 max-w-full space-y-2 relative">
+                    <div className="text-xs text-stone-800 font-sans whitespace-pre-wrap leading-relaxed break-words">
+                      {getCompiledMessage(
+                        { titulo: 'Casamento Marina & Lucas', data: '2026-12-15', token: 'exemplo-galeria', acesso_restrito: true },
+                        { id: 'cli_123', nome: 'Marina Silva', email: 'marina@email.com', senha: '123' },
+                        { prazo: '2026-12-15', observacoes: '' },
+                        tempTemplate || null
+                      )}
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <span className="text-[9px] text-stone-400 font-mono">14:30 ✓✓</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-stone-300/60 text-center">
+                  <p className="text-[9px] text-stone-600 font-medium">
+                    Esta prévia demonstra em tempo real exatamente o que o cliente verá no WhatsApp ou e-mail.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sub-tab 5: Portfólio */}
@@ -3759,7 +3920,7 @@ Qualquer dúvida estou à disposição!`);
                     rows="3"
                     value={shareForm.observacoes}
                     onChange={(e) => handleShareFormChange('observacoes', e.target.value)}
-                    placeholder="Ex: As fotos da apresentação serão enviadas separadas..."
+                    placeholder="Ex: Observações adicionais, orientações especiais..."
                     className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20 resize-none"
                   />
                 </div>

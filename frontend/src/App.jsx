@@ -105,6 +105,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('client'); // 'client' | 'admin' | 'uploader' | 'magic-client'
   const [activeEventId, setActiveEventId] = useState(null);
   const [selectedGalleryToken, setSelectedGalleryToken] = useState(null);
+  const [selectedGalleryClientParam, setSelectedGalleryClientParam] = useState(null);
 
   // Estados do Portfólio Público
   const [portfolioCategory, setPortfolioCategory] = useState('todos');
@@ -356,9 +357,11 @@ export default function App() {
     const handleUrlRoute = () => {
       const params = new URLSearchParams(window.location.search);
       const galleryToken = params.get('gallery');
+      const clientParam = params.get('c') || params.get('client') || params.get('cliente');
       if (galleryToken) {
-        console.log(`[ROUTE] Link mágico detectado para a galeria: ${galleryToken}`);
+        console.log(`[ROUTE] Link mágico detectado para a galeria: ${galleryToken}, cliente: ${clientParam || 'geral'}`);
         setSelectedGalleryToken(galleryToken);
+        setSelectedGalleryClientParam(clientParam || null);
         setActiveTab('magic-client');
       }
     };
@@ -499,35 +502,47 @@ export default function App() {
     return () => unsubscribeEvent();
   }, [selectedGalleryToken, db]);
 
-  // Sincroniza o cliente da galeria ativa caso ele já tenha se identificado anteriormente
+  // Sincroniza o cliente da galeria ativa caso ele já tenha se identificado anteriormente ou venha via URL (?c=id)
   useEffect(() => {
     if (!magicEvent || !db) {
       setMagicClient(null);
       return;
     }
 
-    const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
-    
-    // Se houver mais de um cliente associado à galeria (no conjunto de clientes_permitidos + id_cliente),
-    // e o usuário ainda não se identificou (não há savedClientId no sessionStorage),
-    // não podemos assumir o cliente padrão (magicEvent.id_cliente) para evitar login incorreto.
     const clientIdsSet = new Set(magicEvent.clientes_permitidos || []);
     if (magicEvent.id_cliente) {
       clientIdsSet.add(magicEvent.id_cliente);
     }
     const hasMultipleClients = clientIdsSet.size > 1;
 
-    const clientIdToFetch = savedClientId || (hasMultipleClients ? null : magicEvent.id_cliente);
+    let targetClientId = null;
 
-    if (!clientIdToFetch) {
+    // 1. Se veio parâmetro de cliente na URL (?c=ID ou ?cliente=ID) e é permitido para esta galeria
+    if (selectedGalleryClientParam && clientIdsSet.has(selectedGalleryClientParam)) {
+      targetClientId = selectedGalleryClientParam;
+      sessionStorage.setItem(`active_client_${magicEvent.id}`, targetClientId);
+    }
+
+    // 2. Se não veio na URL, tenta recuperar da sessão ativa salva no navegador
+    if (!targetClientId) {
+      const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
+      targetClientId = savedClientId || (hasMultipleClients ? null : magicEvent.id_cliente);
+    }
+
+    if (!targetClientId) {
       setMagicClient(null);
       return;
     }
 
-    console.log(`[FIREBASE] Buscando dados do cliente da galeria: ${clientIdToFetch}`);
-    const unsubscribeClient = onSnapshot(doc(db, "clientes", clientIdToFetch), (docSnap) => {
+    console.log(`[FIREBASE] Buscando dados do cliente da galeria: ${targetClientId}`);
+    const unsubscribeClient = onSnapshot(doc(db, "clientes", targetClientId), (docSnap) => {
       if (docSnap.exists()) {
-        setMagicClient({ id: docSnap.id, ...docSnap.data() });
+        const clientData = { id: docSnap.id, ...docSnap.data() };
+        setMagicClient(clientData);
+        // Se a galeria NÃO for restrita por senha, autentica o acesso imediatamente
+        if (!magicEvent.acesso_restrito) {
+          setAuthenticatedGalleries((prev) => ({ ...prev, [magicEvent.id]: true }));
+        }
       } else {
         setMagicClient(null);
       }
@@ -536,7 +551,7 @@ export default function App() {
     });
 
     return () => unsubscribeClient();
-  }, [magicEvent, db]);
+  }, [magicEvent, selectedGalleryClientParam, db]);
 
   // Controla contagem de visualizações do evento para estimativa de banda de tráfego
   useEffect(() => {
@@ -1579,6 +1594,7 @@ export default function App() {
   // Reseta a rota de volta para o ambiente de testes
   const handleBackToWorkspace = () => {
     setSelectedGalleryToken(null);
+    setSelectedGalleryClientParam(null);
     setActiveTab('admin');
     window.history.pushState({}, '', '/');
   };
@@ -1693,6 +1709,7 @@ export default function App() {
       return (
         <ClientAccessPortal
           event={matchedEvent}
+          initialClient={currentClient}
           onCheckEmail={handleCheckClientEmail}
           onAccessSuccess={(client) => {
             setMagicClient(client);
@@ -1805,6 +1822,7 @@ export default function App() {
           onClick={() => {
             setActiveTab('client');
             setSelectedGalleryToken(null);
+            setSelectedGalleryClientParam(null);
             setSelectedWeddingId(null);
             setSelectedBlogPostId(null);
             setLightboxIndex(null);
@@ -1830,6 +1848,7 @@ export default function App() {
               onClick={() => {
                 setActiveTab('client');
                 setSelectedGalleryToken(null);
+                setSelectedGalleryClientParam(null);
                 setLightboxIndex(null);
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
@@ -1846,6 +1865,7 @@ export default function App() {
               onClick={() => {
                 setActiveTab('real-weddings');
                 setSelectedGalleryToken(null);
+                setSelectedGalleryClientParam(null);
                 setLightboxIndex(null);
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
@@ -1862,6 +1882,7 @@ export default function App() {
               onClick={() => {
                 setActiveTab('blog');
                 setSelectedGalleryToken(null);
+                setSelectedGalleryClientParam(null);
                 setLightboxIndex(null);
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
@@ -1878,6 +1899,7 @@ export default function App() {
               onClick={() => {
                 setActiveTab('fornecedores');
                 setSelectedGalleryToken(null);
+                setSelectedGalleryClientParam(null);
                 setLightboxIndex(null);
                 setSelectedWeddingId(null);
                 setSelectedBlogPostId(null);
@@ -2832,15 +2854,25 @@ export default function App() {
   );
 }
 
-function ClientAccessPortal({ event, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
+  const [email, setEmail] = useState(initialClient?.email || '');
+  const [name, setName] = useState(initialClient?.nome || '');
+  const [phone, setPhone] = useState(initialClient?.telefone || '');
   const [password, setPassword] = useState('');
-  const [step, setStep] = useState('email'); // 'email' | 'password' | 'register'
-  const [matchedClient, setMatchedClient] = useState(null);
+  const [step, setStep] = useState(initialClient ? 'password' : 'email'); // 'email' | 'password' | 'register'
+  const [matchedClient, setMatchedClient] = useState(initialClient || null);
   const [error, setError] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  useEffect(() => {
+    if (initialClient) {
+      setEmail(initialClient.email || '');
+      setName(initialClient.nome || '');
+      setPhone(initialClient.telefone || '');
+      setMatchedClient(initialClient);
+      setStep('password');
+    }
+  }, [initialClient]);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();

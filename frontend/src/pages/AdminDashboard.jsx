@@ -667,10 +667,17 @@ export default function AdminDashboard({
     setActiveSubTab('new-gallery');
   };
 
-  const copyToClipboard = (token) => {
-    const link = `${window.location.origin}/?gallery=${token}`;
+  const getShareLink = (token, clientId = null) => {
+    if (clientId) {
+      return `${window.location.origin}/?gallery=${token}&c=${clientId}`;
+    }
+    return `${window.location.origin}/?gallery=${token}`;
+  };
+
+  const copyToClipboard = (token, clientId = null) => {
+    const link = getShareLink(token, clientId);
     navigator.clipboard.writeText(link).then(() => {
-      setCopySuccess(token);
+      setCopySuccess(clientId ? `${token}_${clientId}` : token);
       setTimeout(() => setCopySuccess(null), 2500);
     });
   };
@@ -702,13 +709,9 @@ export default function AdminDashboard({
     return `${parseInt(day, 10)} de ${monthName} de ${year}`;
   };
 
-  const getShareLink = (token) => {
-    return `${window.location.origin}/?gallery=${token}`;
-  };
-
   const getCompiledMessage = (event, client, form, customTemplate = null) => {
     if (!event) return '';
-    const link = getShareLink(event.token);
+    const link = getShareLink(event.token, client?.id);
     const dateFormatted = formatEventDate(form.prazo || event.data);
     const senhaText = event.acesso_restrito ? (client?.senha || '123456') : '(Acesso direto por link)';
     
@@ -739,7 +742,7 @@ Qualquer dúvida estou à disposição!`);
     return template;
   };
 
-  const handleOpenShareModal = (evento) => {
+  const handleOpenShareModal = (evento, targetClient = null) => {
     const getClientsForEvent = (evt) => {
       const list = [];
       const clientIds = new Set(evt.clientes_permitidos || []);
@@ -751,16 +754,16 @@ Qualquer dúvida estou à disposição!`);
       });
       clientIds.forEach(id => {
         const c = clientes.find(client => client.id === id);
-        if (c) list.push(c);
+        if (c && !list.some(item => item.id === c.id)) list.push(c);
       });
       return list;
     };
 
     const associated = getClientsForEvent(evento);
-    const primaryClient = associated[0] || null;
+    const selectedClient = targetClient || associated[0] || null;
 
     setSharingEvent(evento);
-    setSharingClient(primaryClient);
+    setSharingClient(selectedClient);
     setIsCustomMessageEdited(false);
     setTempTemplate(templateMensagem || '');
     
@@ -772,7 +775,7 @@ Qualquer dúvida estou à disposição!`);
       customMessage: ''
     };
     
-    initialForm.customMessage = getCompiledMessage(evento, primaryClient, initialForm, templateMensagem || null);
+    initialForm.customMessage = getCompiledMessage(evento, selectedClient, initialForm, templateMensagem || null);
     setShareForm(initialForm);
     setIsShareModalOpen(true);
   };
@@ -1464,6 +1467,55 @@ Qualquer dúvida estou à disposição!`);
                                                   className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0"
                                                 >
                                                   Reabrir Seleção
+                                                </button>
+                                              )}
+                                            </div>
+
+                                            {/* Ações de Compartilhamento / Link Exclusivo do Cliente */}
+                                            <div className="flex items-center gap-1.5 pt-2 border-t border-stone-100 flex-wrap">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenShareModal(evento, c)}
+                                                className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 text-white rounded text-[8.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shadow-2xs"
+                                                title={`Gerar mensagem e enviar link exclusivo para ${c.nome}`}
+                                              >
+                                                <span>🔗 Gerar / Enviar Link</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(evento.token, c.id)}
+                                                className={`px-2 py-1 rounded text-[8.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 border ${
+                                                  copySuccess === `${evento.token}_${c.id}`
+                                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-extrabold'
+                                                    : 'bg-white hover:bg-stone-50 border-stone-250 text-stone-700'
+                                                }`}
+                                                title={`Copiar link direto para ${c.nome}:\n${getShareLink(evento.token, c.id)}`}
+                                              >
+                                                <span>{copySuccess === `${evento.token}_${c.id}` ? '✓ Link Copiado!' : '📋 Copiar Link'}</span>
+                                              </button>
+
+                                              {c.telefone && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const initialForm = {
+                                                      observacoes: 'As fotos da apresentação serão enviadas separadas posteriormente.',
+                                                      emailSuporte: 'wilkson@gmail.com',
+                                                      nomeFotografo: 'Wilkson Albuquerque Carvalho',
+                                                      prazo: evento.data || '',
+                                                      customMessage: ''
+                                                    };
+                                                    const msg = getCompiledMessage(evento, c, initialForm, templateMensagem || null);
+                                                    const cleanPhone = c.telefone.replace(/\D/g, '');
+                                                    const formattedPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? '55' + cleanPhone : cleanPhone;
+                                                    const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(msg)}`;
+                                                    window.open(waUrl, '_blank');
+                                                  }}
+                                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-250 text-emerald-800 rounded text-[8.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
+                                                  title={`Enviar WhatsApp com link e credenciais para ${c.nome}`}
+                                                >
+                                                  <span>💬 WhatsApp</span>
                                                 </button>
                                               )}
                                             </div>
@@ -3613,36 +3665,76 @@ Qualquer dúvida estou à disposição!`);
                     });
                     clientIds.forEach(id => {
                       const c = clientes.find(client => client.id === id);
-                      if (c) list.push(c);
+                      if (c && !list.some(item => item.id === c.id)) list.push(c);
                     });
                     return list;
                   };
                   const associatedClients = getClientsForEvent(sharingEvent);
-                  if (associatedClients.length <= 1) return null;
 
                   return (
-                    <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                        Selecionar Cliente Destinatário
-                      </label>
-                      <select
-                        value={sharingClient?.id || ''}
-                        onChange={(e) => {
-                          const targetClient = associatedClients.find(c => c.id === e.target.value);
-                          setSharingClient(targetClient);
-                          if (targetClient) {
-                            setShareForm(prev => ({
-                              ...prev,
-                              customMessage: getCompiledMessage(sharingEvent, targetClient, prev, tempTemplate || null)
-                            }));
-                          }
-                        }}
-                        className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-white"
-                      >
-                        {associatedClients.map(c => (
-                          <option key={c.id} value={c.id}>{c.nome} ({c.email})</option>
-                        ))}
-                      </select>
+                    <div className="space-y-3">
+                      {associatedClients.length > 1 && (
+                        <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                              👥 Destinatário Ativo ({associatedClients.length} clientes vinculados):
+                            </span>
+                            <span className="text-[8px] text-amber-700 font-bold uppercase tracking-wider">Clique para alternar</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {associatedClients.map((c) => {
+                              const isSelected = sharingClient?.id === c.id;
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSharingClient(c);
+                                    setIsCustomMessageEdited(false);
+                                    setShareForm(prev => ({
+                                      ...prev,
+                                      customMessage: getCompiledMessage(sharingEvent, c, prev, tempTemplate || null)
+                                    }));
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-stone-900 text-white shadow-xs scale-[1.02]'
+                                      : 'bg-white hover:bg-stone-100 text-stone-700 border border-stone-250'
+                                  }`}
+                                >
+                                  <span>👤 {c.nome}</span>
+                                  {c.telefone && <span className="text-[9px] opacity-75">({c.telefone})</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Box com Link Exclusivo do Cliente */}
+                      <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-stone-500">
+                            Link Exclusivo de {sharingClient?.nome || 'Cliente'}:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const directLink = getShareLink(sharingEvent.token, sharingClient?.id);
+                              navigator.clipboard.writeText(directLink).then(() => {
+                                setCopySuccess('modal_link');
+                                setTimeout(() => setCopySuccess(null), 2500);
+                              });
+                            }}
+                            className="text-[9px] font-bold text-stone-850 hover:underline uppercase tracking-wider cursor-pointer"
+                          >
+                            {copySuccess === 'modal_link' ? '✓ Link Copiado!' : 'Copiar Apenas o Link'}
+                          </button>
+                        </div>
+                        <div className="text-[10px] font-mono text-stone-700 bg-white p-2 rounded border border-stone-200/80 truncate select-all">
+                          {getShareLink(sharingEvent.token, sharingClient?.id)}
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
@@ -3778,16 +3870,31 @@ Qualquer dúvida estou à disposição!`);
                   />
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button
+                    type="button"
                     onClick={() => {
                       navigator.clipboard.writeText(shareForm.customMessage).then(() => {
                         alert("Mensagem copiada para a área de transferência!");
                       });
                     }}
-                    className="flex-1 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest shadow transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Copiar Mensagem</span>
+                    <span>📋 Copiar Mensagem</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const directLink = getShareLink(sharingEvent.token, sharingClient?.id);
+                      navigator.clipboard.writeText(directLink).then(() => {
+                        alert(`Link exclusivo de ${sharingClient?.nome || 'Cliente'} copiado!`);
+                      });
+                    }}
+                    className="py-2.5 px-3 bg-white hover:bg-stone-50 border border-stone-250 text-stone-700 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    title="Copiar apenas o link direto deste cliente"
+                  >
+                    <span>🔗 Copiar Link</span>
                   </button>
                   
                   {(() => {
@@ -3803,9 +3910,9 @@ Qualquer dúvida estou à disposição!`);
                         href={waUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-750 text-white rounded text-xs font-bold uppercase tracking-widest shadow transition-colors flex items-center justify-center gap-2 text-center animate-pulse"
+                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-widest shadow transition-colors flex items-center justify-center gap-1.5 text-center cursor-pointer"
                       >
-                        <span>Enviar WhatsApp</span>
+                        <span>💬 Enviar WhatsApp</span>
                       </a>
                     );
                   })()}

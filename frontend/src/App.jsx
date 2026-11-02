@@ -1768,7 +1768,11 @@ export default function App() {
     });
 
     return (
-      <div className="h-screen overflow-hidden flex flex-col bg-[#FAF9F6]">
+      <div 
+        onContextMenu={(e) => e.preventDefault()}
+        className="h-screen overflow-hidden flex flex-col bg-[#FAF9F6] select-none"
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      >
         <div className="flex bg-stone-100 border-b border-stone-200 px-6 py-2 flex items-center justify-between text-xs text-stone-500 font-sans flex-shrink-0">
           <span>Identificado como: <strong className="text-stone-850">{currentClient.nome}</strong> ({currentClient.email})</span>
           <button 

@@ -71,14 +71,18 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
         }`}
       >
         {/* Imagem */}
-        <div className="relative w-full aspect-[4/3] flex-grow bg-stone-100 overflow-hidden">
+        <div className="relative w-full aspect-[4/3] flex-grow bg-stone-100 overflow-hidden select-none" style={{ WebkitTouchCallout: 'none' }}>
           <img
             src={photo.url_storage}
             alt={photo.name}
             loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+            draggable="false"
+            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] pointer-events-none select-none protected-photo"
           />
           
+          {/* Película invisível de proteção contra toque longo e salvamento mobile */}
+          <div className="absolute inset-0 z-10 select-none" style={{ WebkitTouchCallout: 'none' }} />
+
           <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
           {/* Marca D'água nas Miniaturas */}
@@ -283,6 +287,82 @@ export default function PhotoVirtualGrid({
   // Estado para visualização de Lightbox
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
   const [isShrunk, setIsShrunk] = useState(false);
+
+  // Estados para Proteção Antifurto e Antiprint (para clientes)
+  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
+  const [isPrintShieldActive, setIsPrintShieldActive] = useState(false);
+  const [securityToast, setSecurityToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+
+  const triggerSecurityWarning = useCallback((message) => {
+    setSecurityToast(message);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => {
+      setSecurityToast(null);
+    }, 2800);
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) return;
+
+    const handleWindowBlur = () => {
+      setIsWindowBlurred(true);
+    };
+
+    const handleWindowFocus = () => {
+      setIsWindowBlurred(false);
+    };
+
+    const handleSecurityKeyDown = (e) => {
+      const isPrintScreen = e.key === 'PrintScreen' || e.keyCode === 44;
+      const isPrintShortcut = (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P');
+      const isSaveShortcut = (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S');
+      const isMacScreenshot = e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key);
+      const isWindowsSnippet = e.shiftKey && (e.key === 's' || e.key === 'S') && (e.metaKey || e.ctrlKey);
+
+      if (isPrintScreen || isMacScreenshot || isWindowsSnippet) {
+        setIsPrintShieldActive(true);
+        triggerSecurityWarning('🛡️ Captura de tela bloqueada para proteção de direitos autorais.');
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText('Conteúdo protegido contra captura de tela.').catch(() => {});
+        }
+
+        setTimeout(() => {
+          setIsPrintShieldActive(false);
+        }, 1800);
+      } else if (isPrintShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerSecurityWarning('⚠️ Impressão bloqueada para proteção dos direitos autorais.');
+      } else if (isSaveShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerSecurityWarning('⚠️ Salvamento de página bloqueado para proteção das fotos.');
+      }
+    };
+
+    const handleSecurityKeyUp = (e) => {
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText('Conteúdo protegido contra captura de tela.').catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('keydown', handleSecurityKeyDown);
+    window.addEventListener('keyup', handleSecurityKeyUp);
+
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('keydown', handleSecurityKeyDown);
+      window.removeEventListener('keyup', handleSecurityKeyUp);
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, [isAdmin, triggerSecurityWarning]);
 
   // Estados para simulação de download
   const [isDownloading, setIsDownloading] = useState(false);
@@ -516,7 +596,16 @@ export default function PhotoVirtualGrid({
   const gridHeight = dimensions.height - currentHeaderHeight - (isMobile ? 12 : 24);
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans relative">
+    <div 
+      className="w-full h-full flex flex-col bg-[#FAF9F6] text-stone-900 font-sans relative select-none"
+      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      onContextMenu={(e) => {
+        if (!isAdmin) {
+          e.preventDefault();
+          triggerSecurityWarning('⚠️ Clique com botão direito desativado para proteção das fotos.');
+        }
+      }}
+    >
       
       {/* Container Fixo do Cabeçalho (Cover + Nav) para transição de opacidade/altura via hardware GPU */}
       <div className="absolute top-0 left-0 w-full z-30 flex flex-col flex-shrink-0">
@@ -596,8 +685,12 @@ export default function PhotoVirtualGrid({
       {/* 3. Grid de Fotos Principal (Passa por baixo do cabeçalho fixo com padding-top suave) */}
       <div 
         ref={containerRef} 
-        className="flex-grow pb-3 sm:pb-6 overflow-hidden bg-[#FAF9F6] transition-all duration-300 ease-in-out"
+        className="flex-grow pb-3 sm:pb-6 overflow-hidden bg-[#FAF9F6] transition-all duration-300 ease-in-out select-none"
         style={{ 
+          filter: (!isAdmin && (isWindowBlurred || isPrintShieldActive)) ? 'blur(30px)' : 'none',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
           paddingTop: isShrunk 
             ? (isMobile ? '138px' : '118px') 
             : (isMobile ? '258px' : '378px') 
@@ -824,12 +917,25 @@ export default function PhotoVirtualGrid({
             </button>
 
             {/* Image Wrapper */}
-            <div className="relative max-w-full max-h-[70vh] flex items-center justify-center select-none overflow-hidden bg-stone-900 rounded-lg shadow-2xl border border-white/5">
+            <div 
+              className="relative max-w-full max-h-[70vh] flex items-center justify-center select-none overflow-hidden bg-stone-900 rounded-lg shadow-2xl border border-white/5"
+              style={{ WebkitTouchCallout: 'none' }}
+              onContextMenu={(e) => {
+                if (!isAdmin) {
+                  e.preventDefault();
+                  triggerSecurityWarning('⚠️ Clique com botão direito desativado para proteção das fotos.');
+                }
+              }}
+            >
               <img
                 src={activeLightboxPhoto.url_storage}
                 alt={activeLightboxPhoto.name}
-                className="max-w-full max-h-[70vh] object-contain pointer-events-none"
+                draggable="false"
+                className="max-w-full max-h-[70vh] object-contain pointer-events-none select-none protected-photo"
               />
+
+              {/* Película invisível de proteção contra toque longo no celular */}
+              <div className="absolute inset-0 z-15 select-none" style={{ WebkitTouchCallout: 'none' }} />
 
               {/* Watermark in Lightbox */}
               {marcaDaguaAtiva && marcaDaguaExpandida && (
@@ -917,6 +1023,38 @@ export default function PhotoVirtualGrid({
             </p>
           </div>
 
+        </div>
+      )}
+
+      {/* Escudo Protetor contra Captura de Tela e Perda de Foco (Snipping Tool) */}
+      {!isAdmin && (isWindowBlurred || isPrintShieldActive) && (
+        <div 
+          onClick={() => {
+            setIsWindowBlurred(false);
+            setIsPrintShieldActive(false);
+          }}
+          className="fixed inset-0 z-[9999] backdrop-blur-3xl bg-stone-950/90 flex flex-col items-center justify-center text-center p-6 text-white cursor-pointer select-none animate-fade-in"
+        >
+          <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4 text-2xl shadow-xl">
+            🔒
+          </div>
+          <h3 className="font-serif-editorial text-2xl sm:text-3xl font-light tracking-wide uppercase mb-2">
+            Visualização Protegida
+          </h3>
+          <p className="text-xs sm:text-sm text-stone-300 max-w-md font-sans leading-relaxed mb-4">
+            Esta galeria está protegida contra cópias e capturas de tela não autorizadas para preservar os direitos autorais do fotógrafo.
+          </p>
+          <span className="px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 text-[10px] font-bold uppercase tracking-widest transition-all">
+            Clique na tela para continuar visualizando
+          </span>
+        </div>
+      )}
+
+      {/* Toast flutuante de alerta de segurança */}
+      {securityToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] bg-stone-900/95 text-white border border-white/15 px-5 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2.5 text-xs font-medium animate-fade-in pointer-events-none">
+          <span className="text-sm">🛡️</span>
+          <span>{securityToast}</span>
         </div>
       )}
 

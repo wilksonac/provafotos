@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
+import PaymentModal from './PaymentModal';
 
 // Gerador de fotos fictícias com semente única baseada no ID do evento.
 // Isso garante que cada galeria nova tenha fotos totalmente distintas e exclusivas.
@@ -195,6 +196,10 @@ export default function PhotoVirtualGrid({
   dataEvent = '18 de Junho de 2026',
   onToggleSelection,
   onFinalizeEvent,
+  onPaymentSuccess,
+  clienteObj = null,
+  eventoObj = null,
+  mercadoPagoToken = '',
   isDemo = true,
   isAdmin = false
 }) {
@@ -257,6 +262,7 @@ export default function PhotoVirtualGrid({
 
   const [currentStatus, setCurrentStatus] = useState(statusEvento);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [activeScene, setActiveScene] = useState('Todas');
 
   const availableScenes = useMemo(() => {
@@ -830,6 +836,18 @@ export default function PhotoVirtualGrid({
                 )}
               </div>
             )}
+
+            {/* Botão de Pagar PIX (se houver extras pendentes de pagamento) */}
+            {isDownloadBlocked && (
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm active:scale-95 flex-shrink-0 animate-pulse"
+                title="Pagar fotos extras via PIX para liberar o download"
+              >
+                <span>💳 Pagar PIX</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -864,15 +882,44 @@ export default function PhotoVirtualGrid({
                 Voltar
               </button>
               <button
-                onClick={handleFinalize}
+                onClick={() => {
+                  const hasExtrasPending = permitirExtras && limiteFotos && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado;
+                  if (hasExtrasPending) {
+                    setShowConfirmModal(false);
+                    setIsPaymentModalOpen(true);
+                  } else {
+                    handleFinalize();
+                  }
+                }}
                 className="px-5 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-[10px] font-bold uppercase tracking-widest transition-all"
               >
-                Confirmar e Enviar
+                {permitirExtras && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado
+                  ? 'Pagar PIX e Finalizar'
+                  : 'Confirmar e Enviar'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 5.1 Modal de Pagamento Automático via PIX Mercado Pago */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onPaymentSuccess={(paymentRes) => {
+          setIsPaymentModalOpen(false);
+          if (onPaymentSuccess) {
+            onPaymentSuccess(paymentRes);
+          }
+          handleFinalize();
+        }}
+        evento={eventoObj || { id: eventId, titulo: tituloEvent }}
+        cliente={clienteObj}
+        limiteFotos={limiteFotos}
+        selectedCount={selectedCount}
+        valorFotoExtra={valorFotoExtra}
+        mercadoPagoToken={mercadoPagoToken}
+      />
 
       {/* 6. Lightbox Premium de Visualização Ampliada */}
       {activeLightboxIndex !== null && activeLightboxPhoto && (

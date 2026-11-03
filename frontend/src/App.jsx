@@ -143,7 +143,9 @@ export default function App() {
     whatsapp: '5511988887777',
     instagram: '@wilksonfotografia',
     email: 'contato@wilksonfotografias.com.br',
-    endereco: 'São Paulo - SP'
+    endereco: 'São Paulo - SP',
+    mercado_pago_token: import.meta.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || '',
+    mercado_pago_ativo: true
   });
   const [templateMensagem, setTemplateMensagem] = useState(
     "Oi, {nome}. Tudo bem?\n\nA galeria {titulo} já está disponível.\nO prazo para a seleção das fotos é dia {prazo}.\n\n{observacoes}Para acessar a galeria use os dados abaixo:\n\nLink de acesso: {link}\nE-mail: {email}\nSenha: {senha}\n\nQualquer dúvida estou à disposição!"
@@ -1104,20 +1106,79 @@ export default function App() {
     }
   };
 
-  // Confirmar pagamento das fotos extras
-  const handleConfirmPayment = (eventId) => {
-    if (db) {
-      updateDoc(doc(db, "eventos", eventId), { pagamento_extras_confirmado: true })
-        .then(() => console.log("[FIREBASE] Pagamento extras confirmado:", eventId))
-        .catch(err => console.error("[FIREBASE] Erro ao confirmar pagamento:", err));
-    } else {
-      setEventos((prevEventos) =>
-        prevEventos.map((evt) =>
-          evt.id === eventId ? { ...evt, pagamento_extras_confirmado: true } : evt
-        )
-      );
+  // Confirmar pagamento das fotos extras (manual pelo fotógrafo ou automático via PIX)
+  const handleConfirmPayment = (eventId, clientId = null) => {
+    const updatePayload = { pagamento_extras_confirmado: true };
+    if (clientId) {
+      updatePayload[`selecoes_clientes.${clientId}.pagamento_extras_confirmado`] = true;
     }
-    console.log(`[PAYMENT] Pagamento das fotos extras confirmado para o evento: ${eventId}`);
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), updatePayload)
+        .then(() => console.log("[FIREBASE] Pagamento extras confirmado:", eventId, clientId))
+        .catch(err => console.error("[FIREBASE] Erro ao confirmar pagamento:", err));
+    }
+
+    setEventos((prevEventos) =>
+      prevEventos.map((evt) => {
+        if (evt.id === eventId) {
+          const updatedSelections = { ...(evt.selecoes_clientes || {}) };
+          if (clientId && updatedSelections[clientId]) {
+            updatedSelections[clientId] = {
+              ...updatedSelections[clientId],
+              pagamento_extras_confirmado: true
+            };
+          }
+          return {
+            ...evt,
+            pagamento_extras_confirmado: true,
+            selecoes_clientes: updatedSelections
+          };
+        }
+        return evt;
+      })
+    );
+
+    if (magicEvent && magicEvent.id === eventId) {
+      setMagicEvent((prev) => {
+        if (!prev) return null;
+        const updatedSelections = { ...(prev.selecoes_clientes || {}) };
+        if (clientId && updatedSelections[clientId]) {
+          updatedSelections[clientId] = {
+            ...updatedSelections[clientId],
+            pagamento_extras_confirmado: true
+          };
+        }
+        return {
+          ...prev,
+          pagamento_extras_confirmado: true,
+          selecoes_clientes: updatedSelections
+        };
+      });
+    }
+
+    console.log(`[PAYMENT] Pagamento das fotos extras confirmado para o evento: ${eventId}, cliente: ${clientId}`);
+  };
+
+  // Callback acionado quando o Mercado Pago confirma o PIX em tempo real
+  const handlePaymentSuccess = (eventId, clientId, paymentData) => {
+    console.log("[PAYMENT] Pagamento PIX aprovado via Mercado Pago:", paymentData);
+    handleConfirmPayment(eventId, clientId);
+
+    if (db && clientId) {
+      updateDoc(doc(db, "eventos", eventId), {
+        pagamento_extras_confirmado: true,
+        [`selecoes_clientes.${clientId}.pagamento_extras_confirmado`]: true,
+        [`selecoes_clientes.${clientId}.transacao_pix`]: {
+          paymentId: paymentData.paymentId || null,
+          amount: paymentData.amount || null,
+          dateApproved: paymentData.dateApproved || new Date().toISOString(),
+          metodo: 'pix'
+        }
+      })
+        .then(() => console.log("[FIREBASE] Transação PIX salva com sucesso:", eventId))
+        .catch((err) => console.error("[FIREBASE] Erro ao salvar dados do PIX:", err));
+    }
   };
 
   // Excluir galeria/evento
@@ -1964,11 +2025,19 @@ export default function App() {
             marcaDaguaEstilo={matchedEvent.marca_dagua_estilo || 'leve'}
             tipoGaleria={matchedEvent.tipo_galeria}
             permitirDownload={matchedEvent.permitir_download}
-            pagamentoExtrasConfirmado={matchedEvent.pagamento_extras_confirmado}
+            pagamentoExtrasConfirmado={
+              matchedEvent.pagamento_extras_confirmado ||
+              (matchedEvent.selecoes_clientes && matchedEvent.selecoes_clientes[currentClient.id]?.pagamento_extras_confirmado) ||
+              (activeSelection && activeSelection.pagamento_extras_confirmado)
+            }
             tituloEvent={matchedEvent.titulo}
             dataEvent={matchedEvent.data}
             onToggleSelection={(photoId, isSelected) => handleToggleSelection(matchedEvent.id, photoId, isSelected, currentClient.id)}
             onFinalizeEvent={(eventId) => handleFinalizeEvent(eventId, currentClient.id)}
+            onPaymentSuccess={(paymentData) => handlePaymentSuccess(matchedEvent.id, currentClient.id, paymentData)}
+            clienteObj={currentClient}
+            eventoObj={matchedEvent}
+            mercadoPagoToken={contato?.mercado_pago_token || import.meta.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || ''}
             isDemo={!matchedEvent.fotos || matchedEvent.fotos.length === 0}
             isAdmin={false}
           />

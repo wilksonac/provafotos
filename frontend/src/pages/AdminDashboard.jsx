@@ -113,8 +113,11 @@ export default function AdminDashboard({
     whatsapp: contato?.whatsapp || '',
     instagram: contato?.instagram || '',
     email: contato?.email || '',
-    endereco: contato?.endereco || ''
+    endereco: contato?.endereco || '',
+    mercado_pago_token: contato?.mercado_pago_token || '',
+    mercado_pago_ativo: contato?.mercado_pago_ativo !== undefined ? contato.mercado_pago_ativo : true
   });
+  const [showMercadoPagoToken, setShowMercadoPagoToken] = useState(false);
 
   React.useEffect(() => {
     if (contato) {
@@ -123,7 +126,9 @@ export default function AdminDashboard({
         whatsapp: contato.whatsapp || '',
         instagram: contato.instagram || '',
         email: contato.email || '',
-        endereco: contato.endereco || ''
+        endereco: contato.endereco || '',
+        mercado_pago_token: contato.mercado_pago_token || '',
+        mercado_pago_ativo: contato.mercado_pago_ativo !== undefined ? contato.mercado_pago_ativo : true
       });
     }
   }, [contato]);
@@ -1642,6 +1647,51 @@ export default function AdminDashboard({
                                                 </button>
                                               )}
                                             </div>
+
+                                            {/* Bloco de Pagamento de Fotos Extras do Cliente */}
+                                            {(() => {
+                                              const clientLimit = activeSel?.limite_fotos !== undefined && activeSel?.limite_fotos !== null ? activeSel.limite_fotos : (evento.limite_fotos || 0);
+                                              const clientExtrasCount = !evento.selecao_livre && clientLimit > 0 ? Math.max(0, selecionadasCount - clientLimit) : 0;
+                                              const clientExtrasPaid = activeSel?.pagamento_extras_confirmado || (evento.selecoes_clientes && evento.selecoes_clientes[c.id]?.pagamento_extras_confirmado) || evento.pagamento_extras_confirmado;
+                                              const pixTx = activeSel?.transacao_pix || (evento.selecoes_clientes && evento.selecoes_clientes[c.id]?.transacao_pix);
+
+                                              if (clientExtrasCount === 0) return null;
+
+                                              return (
+                                                <div className="flex items-center justify-between text-[9px] p-2 rounded-lg border bg-stone-50/70 border-stone-200/80 gap-2 flex-wrap">
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="font-bold text-stone-700">
+                                                      +{clientExtrasCount} {clientExtrasCount === 1 ? 'extra' : 'extras'} ({evento.valor_foto_extra ? `R$ ${(clientExtrasCount * evento.valor_foto_extra).toFixed(2).replace('.', ',')}` : 'Sem valor unitário'}):
+                                                    </span>
+                                                    {clientExtrasPaid ? (
+                                                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-250 px-1.5 py-0.5 rounded font-extrabold uppercase text-[7.5px] flex items-center gap-1">
+                                                        <span>✓ Pago</span>
+                                                        {pixTx?.paymentId && <span className="opacity-75 font-mono">#{pixTx.paymentId}</span>}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-amber-800 bg-amber-50 border border-amber-250 px-1.5 py-0.5 rounded font-extrabold uppercase text-[7.5px]">
+                                                        Aguardando Pgto
+                                                      </span>
+                                                    )}
+                                                  </div>
+
+                                                  {!clientExtrasPaid && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        if (confirm(`Deseja confirmar manualmente o pagamento de fotos extras de "${c.nome}"?`)) {
+                                                          onConfirmPayment(evento.id, c.id);
+                                                        }
+                                                      }}
+                                                      className="px-2 py-0.5 bg-amber-700 hover:bg-amber-800 text-white rounded text-[8px] font-bold uppercase tracking-wider transition-colors shadow-2xs ml-auto"
+                                                      title="Confirmar pagamento manualmente"
+                                                    >
+                                                      Confirmar Pgto Manual
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
 
                                             {/* Ações de Compartilhamento / Link Exclusivo do Cliente */}
                                             <div className="flex items-center gap-1.5 pt-2 border-t border-stone-100 flex-wrap">
@@ -3444,6 +3494,97 @@ export default function AdminDashboard({
                 Salvar Informações de Contato
               </button>
             </form>
+          </div>
+
+          {/* Card: Configuração de Pagamento Mercado Pago (PIX Automático) */}
+          <div className="bg-stone-50/45 p-6 rounded-xl border border-stone-200/60 space-y-5">
+            <div className="border-b border-stone-200/50 pb-3 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">💳</span>
+                  <h3 className="font-serif-editorial text-lg text-stone-900">Mercado Pago - PIX Automático</h3>
+                </div>
+                <p className="text-[10px] text-stone-450 uppercase tracking-widest leading-relaxed mt-0.5">
+                  Receba pagamentos de fotos extras automaticamente com baixa instantânea via PIX
+                </p>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[8.5px] font-extrabold uppercase tracking-wider border ${
+                contatoForm.mercado_pago_token ? 'bg-emerald-50 text-emerald-800 border-emerald-250' : 'bg-amber-50 text-amber-800 border-amber-250'
+              }`}>
+                {contatoForm.mercado_pago_token ? '✓ Configurado' : 'Pendente'}
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {/* Switch de Ativação */}
+              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-stone-200/70">
+                <div>
+                  <span className="text-xs font-bold text-stone-850 block">Cobrança Automática via PIX</span>
+                  <span className="text-[10px] text-stone-400 block">Exibir QR Code e código Copia e Cola para o cliente ao finalizar fotos extras</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={contatoForm.mercado_pago_ativo !== false}
+                    onChange={(e) => setContatoForm({ ...contatoForm, mercado_pago_ativo: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {/* Campo Access Token */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                    Access Token do Mercado Pago (Produção ou Teste)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMercadoPagoToken(!showMercadoPagoToken)}
+                    className="text-[9px] font-bold text-stone-500 hover:text-stone-900 uppercase tracking-wider cursor-pointer"
+                  >
+                    {showMercadoPagoToken ? 'Ocultar' : 'Exibir'}
+                  </button>
+                </div>
+                <input
+                  type={showMercadoPagoToken ? 'text' : 'password'}
+                  placeholder="Ex: APP_USR-1234567890123456-..."
+                  value={contatoForm.mercado_pago_token || ''}
+                  onChange={(e) => setContatoForm({ ...contatoForm, mercado_pago_token: e.target.value })}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs font-mono focus:ring-1 focus:ring-stone-400 focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Guia explicativo */}
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-lg space-y-1 text-xs text-blue-900">
+                <span className="font-bold text-[10px] uppercase tracking-wider block">Como obter o seu Access Token:</span>
+                <ol className="list-decimal list-inside text-[10.5px] space-y-1 text-blue-800 leading-relaxed">
+                  <li>Acesse o portal <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-blue-950">Mercado Pago Developers</a>;</li>
+                  <li>Clique em <strong>Suas Integrações</strong> e crie ou escolha uma aplicação;</li>
+                  <li>Vá na aba <strong>Credenciais de Produção</strong> (ou Teste);</li>
+                  <li>Copie o <strong>Access Token</strong> e cole no campo acima;</li>
+                  <li>Clique no botão abaixo para salvar.</li>
+                </ol>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onSaveContato) {
+                    try {
+                      await onSaveContato(contatoForm);
+                      alert("Configurações do Mercado Pago salvas com sucesso!");
+                    } catch (err) {
+                      alert("Erro ao salvar configurações do Mercado Pago: " + err.message);
+                    }
+                  }
+                }}
+                className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded-lg transition-all shadow-sm cursor-pointer"
+              >
+                Salvar Configurações do Mercado Pago
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -432,6 +432,21 @@ export default function App() {
           docs.push({ id: docSnap.id, ...data, fotos: normalizedPhotos });
         }
       });
+
+      // Ordenar da mais recente para a mais antiga (mais recente no topo)
+      docs.sort((a, b) => {
+        const dateA = a.data ? String(a.data).trim() : '';
+        const dateB = b.data ? String(b.data).trim() : '';
+        if (dateA && dateB && dateA !== dateB) {
+          return dateB.localeCompare(dateA);
+        }
+        if (dateA && !dateB) return -1;
+        if (!dateA && dateB) return 1;
+        const timeA = a.createdAt ? Date.parse(a.createdAt) : (typeof a.id === 'string' && a.id.startsWith('evt_') ? parseInt(a.id.replace('evt_', ''), 10) : 0);
+        const timeB = b.createdAt ? Date.parse(b.createdAt) : (typeof b.id === 'string' && b.id.startsWith('evt_') ? parseInt(b.id.replace('evt_', ''), 10) : 0);
+        return timeB - timeA;
+      });
+
       setEventos(docs);
     }, (error) => {
       console.error("[FIREBASE] Erro ao sincronizar eventos para o admin:", error);
@@ -638,6 +653,7 @@ export default function App() {
       status: 'ativa',
       token: `${slug}-${Math.floor(1000 + Math.random() * 9000)}`, // token único de URL
       fotos: [],
+      createdAt: new Date().toISOString(),
       ...newEventData
     };
     
@@ -646,7 +662,7 @@ export default function App() {
         .then(() => console.log("[FIREBASE] Evento salvo:", newEvent.id))
         .catch(err => console.error("[FIREBASE] Erro ao salvar evento:", err));
     } else {
-      setEventos((prev) => [...prev, newEvent]);
+      setEventos((prev) => [newEvent, ...prev]);
     }
     console.log("[ADMIN] Nova galeria de evento criada:", newEvent);
 

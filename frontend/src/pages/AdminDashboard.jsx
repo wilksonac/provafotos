@@ -451,6 +451,7 @@ export default function AdminDashboard({
 
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'aberta' | 'expirada' | 'concluida'
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [gallerySortBy, setGallerySortBy] = useState('data_evento'); // 'data_evento' | 'data_criacao' | 'data_antiga'
   const [showGalleryCategoryModal, setShowGalleryCategoryModal] = useState(false);
   const [newGalleryCategoryInput, setNewGalleryCategoryInput] = useState('');
   const [editingGalleryCategory, setEditingGalleryCategory] = useState(null); // { original: '', current: '' }
@@ -1065,17 +1066,61 @@ export default function AdminDashboard({
               </button>
             </div>
           ) : (() => {
-            const filteredEventos = eventos.filter((evento) => {
-              const computedStatus = getEventStatus(evento);
-              let statusMatch = true;
-              if (statusFilter === 'aberta') statusMatch = (computedStatus === 'ativa');
-              else if (statusFilter === 'concluida') statusMatch = (computedStatus === 'finalizada');
-              else if (statusFilter === 'expirada') statusMatch = (computedStatus === 'expirada');
+            const getEventCreationTime = (evt) => {
+              if (evt.createdAt) {
+                const t = Date.parse(evt.createdAt);
+                if (!isNaN(t)) return t;
+              }
+              if (evt.criado_em) {
+                const t = Date.parse(evt.criado_em);
+                if (!isNaN(t)) return t;
+              }
+              if (typeof evt.id === 'string' && evt.id.startsWith('evt_')) {
+                const num = parseInt(evt.id.replace('evt_', ''), 10);
+                if (!isNaN(num)) return num;
+              }
+              return 0;
+            };
 
-              const categoryMatch = matchesGalleryCategory(evento, categoryFilter);
+            const filteredEventos = eventos
+              .filter((evento) => {
+                const computedStatus = getEventStatus(evento);
+                let statusMatch = true;
+                if (statusFilter === 'aberta') statusMatch = (computedStatus === 'ativa');
+                else if (statusFilter === 'concluida') statusMatch = (computedStatus === 'finalizada');
+                else if (statusFilter === 'expirada') statusMatch = (computedStatus === 'expirada');
 
-              return statusMatch && categoryMatch;
-            });
+                const categoryMatch = matchesGalleryCategory(evento, categoryFilter);
+
+                return statusMatch && categoryMatch;
+              })
+              .sort((a, b) => {
+                if (gallerySortBy === 'data_criacao') {
+                  const timeA = getEventCreationTime(a);
+                  const timeB = getEventCreationTime(b);
+                  if (timeA !== timeB) return timeB - timeA;
+                  return (b.data || '').localeCompare(a.data || '');
+                }
+
+                if (gallerySortBy === 'data_antiga') {
+                  const dateA = a.data ? String(a.data).trim() : '';
+                  const dateB = b.data ? String(b.data).trim() : '';
+                  if (dateA && dateB && dateA !== dateB) {
+                    return dateA.localeCompare(dateB);
+                  }
+                  return getEventCreationTime(a) - getEventCreationTime(b);
+                }
+
+                // Padrão: 'data_evento' (Mais recente no topo)
+                const dateA = a.data ? String(a.data).trim() : '';
+                const dateB = b.data ? String(b.data).trim() : '';
+                if (dateA && dateB && dateA !== dateB) {
+                  return dateB.localeCompare(dateA);
+                }
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                return getEventCreationTime(b) - getEventCreationTime(a);
+              });
 
             const eventosNaCategoria = categoryFilter === 'all'
               ? eventos
@@ -1166,44 +1211,61 @@ export default function AdminDashboard({
                       </div>
                     )}
                   </div>
-                  
-                  <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('all')}
-                      className={`px-3 py-1 rounded transition-all uppercase ${
-                        statusFilter === 'all' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
-                      }`}
-                    >
-                      Todas ({eventosNaCategoria.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('aberta')}
-                      className={`px-3 py-1 rounded transition-all uppercase ${
-                        statusFilter === 'aberta' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
-                      }`}
-                    >
-                      Abertas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'ativa').length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('expirada')}
-                      className={`px-3 py-1 rounded transition-all uppercase ${
-                        statusFilter === 'expirada' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
-                      }`}
-                    >
-                      Expiradas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'expirada').length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('concluida')}
-                      className={`px-3 py-1 rounded transition-all uppercase ${
-                        statusFilter === 'concluida' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
-                      }`}
-                    >
-                      Concluídas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'finalizada').length})
-                    </button>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {/* Seletor de Ordenação */}
+                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-stone-200/90 shadow-2xs">
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Ordem:</span>
+                      <select
+                        value={gallerySortBy}
+                        onChange={(e) => setGallerySortBy(e.target.value)}
+                        className="bg-transparent text-[9px] font-bold uppercase tracking-wider text-stone-800 focus:outline-none cursor-pointer"
+                        title="Critério de ordenação das galerias"
+                      >
+                        <option value="data_evento">📅 Mais Recente Primeiro</option>
+                        <option value="data_criacao">🕒 Recém-Criadas</option>
+                        <option value="data_antiga">📅 Mais Antiga Primeiro</option>
+                      </select>
+                    </div>
+
+                    <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('all')}
+                        className={`px-3 py-1 rounded transition-all uppercase ${
+                          statusFilter === 'all' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                        }`}
+                      >
+                        Todas ({eventosNaCategoria.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('aberta')}
+                        className={`px-3 py-1 rounded transition-all uppercase ${
+                          statusFilter === 'aberta' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                        }`}
+                      >
+                        Abertas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'ativa').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('expirada')}
+                        className={`px-3 py-1 rounded transition-all uppercase ${
+                          statusFilter === 'expirada' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                        }`}
+                      >
+                        Expiradas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'expirada').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('concluida')}
+                        className={`px-3 py-1 rounded transition-all uppercase ${
+                          statusFilter === 'concluida' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                        }`}
+                      >
+                        Concluídas ({eventosNaCategoria.filter(e => getEventStatus(e) === 'finalizada').length})
+                      </button>
+                    </div>
                   </div>
                 </div>
 

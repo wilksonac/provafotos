@@ -111,9 +111,14 @@ export default function App() {
   const [portfolioCategory, setPortfolioCategory] = useState('todos');
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [showClientLogin, setShowClientLogin] = useState(false);
+  const [clientModalTab, setClientModalTab] = useState('login'); // 'login' | 'register'
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [registerNome, setRegisterNome] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerTelefone, setRegisterTelefone] = useState('');
+  const [registerGalleryToken, setRegisterGalleryToken] = useState('');
 
   // Estados de Exibição de Blog e Histórias
   const [selectedWeddingId, setSelectedWeddingId] = useState(null);
@@ -541,7 +546,8 @@ export default function App() {
     // 2. Se não veio na URL, tenta recuperar da sessão ativa salva no navegador
     if (!targetClientId) {
       const savedClientId = sessionStorage.getItem(`active_client_${magicEvent.id}`);
-      targetClientId = savedClientId || (hasMultipleClients ? null : magicEvent.id_cliente);
+      const allowAutoRegister = magicEvent.permitir_auto_cadastro !== false;
+      targetClientId = savedClientId || ((hasMultipleClients || allowAutoRegister) ? null : magicEvent.id_cliente);
     }
 
     if (!targetClientId) {
@@ -618,6 +624,8 @@ export default function App() {
   const handleAddCliente = (newClientData) => {
     const newClient = {
       id: newClientData.id || `cli_${Date.now()}`,
+      origem: newClientData.origem || 'admin',
+      createdAt: newClientData.createdAt || new Date().toISOString(),
       ...newClientData
     };
     
@@ -625,15 +633,16 @@ export default function App() {
       setDoc(doc(db, "clientes", newClient.id), newClient)
         .then(() => console.log("[FIREBASE] Cliente salvo:", newClient.id))
         .catch(err => console.error("[FIREBASE] Erro ao salvar cliente:", err));
-    } else {
-      setClientes((prev) => {
-        const exists = prev.some((c) => c.id === newClient.id);
-        if (exists) {
-          return prev.map((c) => (c.id === newClient.id ? newClient : c));
-        }
-        return [...prev, newClient];
-      });
     }
+    
+    setClientes((prev) => {
+      const exists = prev.some((c) => c.id === newClient.id);
+      if (exists) {
+        return prev.map((c) => (c.id === newClient.id ? newClient : c));
+      }
+      return [...prev, newClient];
+    });
+    
     console.log("[ADMIN] Cadastro de cliente processado:", newClient);
     return newClient;
   };
@@ -951,19 +960,36 @@ export default function App() {
 
   // Vincular cliente à lista de clientes_permitidos do evento
   const handleAssociateClientToEvent = (eventId, clientId) => {
-    const targetEvent = eventos.find(e => e.id === eventId);
-    if (!targetEvent) return;
-    const currentPermitted = targetEvent.clientes_permitidos || [];
-    if (!currentPermitted.includes(clientId)) {
-      const updatedPermitted = [...currentPermitted, clientId];
-      if (db) {
-        updateDoc(doc(db, "eventos", eventId), { clientes_permitidos: updatedPermitted })
-          .then(() => console.log("[FIREBASE] Cliente associado ao evento:", clientId))
-          .catch(err => console.error("[FIREBASE] Erro ao associar cliente ao evento:", err));
-      } else {
-        setEventos(prev => prev.map(e => e.id === eventId ? { ...e, clientes_permitidos: updatedPermitted } : e));
-      }
+    if (!eventId || !clientId) return;
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), {
+        clientes_permitidos: arrayUnion(clientId)
+      })
+        .then(() => console.log("[FIREBASE] Cliente associado ao evento com arrayUnion:", clientId))
+        .catch(err => console.error("[FIREBASE] Erro ao associar cliente ao evento:", err));
     }
+
+    if (magicEvent && magicEvent.id === eventId) {
+      setMagicEvent(prev => {
+        if (!prev) return null;
+        const currentPermitted = prev.clientes_permitidos || [];
+        if (!currentPermitted.includes(clientId)) {
+          return { ...prev, clientes_permitidos: [...currentPermitted, clientId] };
+        }
+        return prev;
+      });
+    }
+
+    setEventos(prev => prev.map(e => {
+      if (e.id === eventId) {
+        const currentPermitted = e.clientes_permitidos || [];
+        if (!currentPermitted.includes(clientId)) {
+          return { ...e, clientes_permitidos: [...currentPermitted, clientId] };
+        }
+      }
+      return e;
+    }));
   };
 
   // Desvincular cliente da lista de clientes_permitidos do evento e remover a seleção correspondente
@@ -1542,8 +1568,8 @@ export default function App() {
       const clientDoc = clientSnap.docs[0];
       const client = { id: clientDoc.id, ...clientDoc.data() };
       
-      // 2. Verificar a senha
-      if (String(client.senha || '').trim() !== String(loginPassword || '').trim()) {
+      // 2. Verificar a senha (se cadastrada)
+      if (client.senha && String(client.senha || '').trim() !== String(loginPassword || '').trim()) {
         setLoginError('E-mail ou senha incorretos.');
         return;
       }
@@ -1553,10 +1579,19 @@ export default function App() {
         collection(db, "eventos"),
         where("id_cliente", "==", client.id)
       );
-      const eventSnap = await getDocs(eventQuery);
+      let eventSnap = await getDocs(eventQuery);
+
+      if (eventSnap.empty) {
+        // Tenta buscar onde o cliente está na lista de clientes_permitidos (autocadastrado)
+        const eventQueryPermitted = query(
+          collection(db, "eventos"),
+          where("clientes_permitidos", "array-contains", client.id)
+        );
+        eventSnap = await getDocs(eventQueryPermitted);
+      }
       
       if (eventSnap.empty) {
-        setLoginError('Nenhuma galeria ativa vinculada a este cliente.');
+        setLoginError('Nenhuma galeria ativa vinculada a este e-mail. Solicite o link ao fotógrafo.');
         return;
       }
       
@@ -1597,6 +1632,7 @@ export default function App() {
       
       setSelectedGalleryToken(matchedEvent.token);
       setActiveTab('magic-client');
+      window.history.pushState({}, '', `/?gallery=${matchedEvent.token}`);
       setShowClientLogin(false);
       setLoginEmail('');
       setLoginPassword('');
@@ -1604,6 +1640,112 @@ export default function App() {
     } catch (err) {
       console.error("[CLIENT LOGIN ERROR]", err);
       setLoginError('Erro ao realizar o acesso: ' + err.message);
+    }
+  };
+
+  // Autocadastro a partir da modal geral "Área do Cliente"
+  const handleGeneralRegister = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+
+    if (!registerNome.trim() || !registerEmail.trim() || !registerTelefone.trim() || !registerGalleryToken.trim()) {
+      setLoginError('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    try {
+      const cleanToken = registerGalleryToken.trim().toLowerCase();
+      // 1. Procurar a galeria pelo token ou ID
+      const eventQ = query(collection(db, "eventos"), where("token", "==", cleanToken));
+      let eventSnap = await getDocs(eventQ);
+
+      let eventDoc = null;
+      if (!eventSnap.empty) {
+        eventDoc = eventSnap.docs[0];
+      } else {
+        const idQ = query(collection(db, "eventos"), where("__name__", "==", registerGalleryToken.trim()));
+        const idSnap = await getDocs(idQ);
+        if (!idSnap.empty) {
+          eventDoc = idSnap.docs[0];
+        }
+      }
+
+      if (!eventDoc) {
+        setLoginError('Galeria/Evento não encontrado. Verifique o código fornecido.');
+        return;
+      }
+
+      const matchedEvent = { id: eventDoc.id, ...eventDoc.data() };
+
+      if (matchedEvent.permitir_auto_cadastro === false) {
+        setLoginError('Esta galeria não permite autocadastro de clientes. Solicite acesso ao fotógrafo.');
+        return;
+      }
+
+      const trimmedEmail = registerEmail.trim().toLowerCase();
+
+      // 2. Verificar se o cliente já existe pelo e-mail
+      const clientQ = query(collection(db, "clientes"), where("email", "==", trimmedEmail));
+      const clientSnap = await getDocs(clientQ);
+
+      let targetClient = null;
+      if (!clientSnap.empty) {
+        const cDoc = clientSnap.docs[0];
+        targetClient = { id: cDoc.id, ...cDoc.data() };
+      } else {
+        targetClient = handleAddCliente({
+          nome: registerNome.trim(),
+          email: trimmedEmail,
+          telefone: registerTelefone.trim(),
+          origem: 'autocadastro',
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      // 3. Associar cliente ao evento via arrayUnion
+      handleAssociateClientToEvent(matchedEvent.id, targetClient.id);
+
+      // 4. Salvar sessão e entrar na galeria
+      sessionStorage.setItem(`active_client_${matchedEvent.id}`, targetClient.id);
+      setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: true }));
+
+      setMagicEvent({
+        ...matchedEvent,
+        fotos: (matchedEvent.fotos || []).map((p, idx) => {
+          if (typeof p === 'string') {
+            return {
+              id: p,
+              url_storage: p,
+              name: `Foto ${idx + 1}`,
+              selecionada: false,
+              destaque: false,
+              cena: ''
+            };
+          }
+          return {
+            id: p.id || p.url_storage || `photo_${idx}`,
+            url_storage: p.url_storage || p.url || '',
+            name: p.name || `Foto ${idx + 1}`,
+            selecionada: !!p.selecionada,
+            destaque: !!p.destaque,
+            cena: p.cena || ''
+          };
+        })
+      });
+      setMagicClient(targetClient);
+
+      setSelectedGalleryToken(matchedEvent.token);
+      setActiveTab('magic-client');
+      window.history.pushState({}, '', `/?gallery=${matchedEvent.token}`);
+      setShowClientLogin(false);
+      setRegisterNome('');
+      setRegisterEmail('');
+      setRegisterTelefone('');
+      setRegisterGalleryToken('');
+      console.log(`[CLIENT AUTOCADASTRO] Sucesso para o cliente ${targetClient.nome}. Acessando galeria: ${matchedEvent.titulo}`);
+    } catch (err) {
+      console.error("[GENERAL REGISTER ERROR]", err);
+      setLoginError('Erro ao realizar autocadastro: ' + err.message);
     }
   };
 
@@ -1794,7 +1936,9 @@ export default function App() {
           <button 
             onClick={() => {
               setActiveClient(null);
+              setMagicClient(null);
               sessionStorage.removeItem(`active_client_${matchedEvent.id}`);
+              setAuthenticatedGalleries((prev) => ({ ...prev, [matchedEvent.id]: false }));
             }} 
             className="underline hover:text-stone-900 font-bold uppercase tracking-wider text-[9px]"
           >
@@ -2756,9 +2900,39 @@ export default function App() {
 
             <div className="space-y-4">
               <div className="text-center">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Acesso Restrito</span>
-                <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Área do Cliente</h3>
-                <p className="text-[11px] text-stone-400 mt-1">Digite seu e-mail e senha de acesso enviados pelo fotógrafo.</p>
+                <span className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Área do Cliente</span>
+                <h3 className="font-serif-editorial text-xl text-stone-900 mt-1">Seleção de Fotos</h3>
+                <p className="text-[11px] text-stone-400 mt-1">
+                  {clientModalTab === 'login'
+                    ? 'Acesse com seu e-mail para continuar sua seleção.'
+                    : 'Cadastre-se rapidamente para escolher suas fotos.'}
+                </p>
+              </div>
+
+              {/* Seletor de Abas (Entrar / Autocadastro) */}
+              <div className="flex border border-stone-200 rounded-lg p-0.5 bg-stone-100/60 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => { setClientModalTab('login'); setLoginError(''); }}
+                  className={`flex-1 py-1.5 rounded-md transition-all text-center text-[10px] font-bold uppercase tracking-wider ${
+                    clientModalTab === 'login'
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  Já tenho acesso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setClientModalTab('register'); setLoginError(''); }}
+                  className={`flex-1 py-1.5 rounded-md transition-all text-center text-[10px] font-bold uppercase tracking-wider ${
+                    clientModalTab === 'register'
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  Novo Cadastro
+                </button>
               </div>
 
               {loginError && (
@@ -2767,38 +2941,97 @@ export default function App() {
                 </div>
               )}
 
-              <form onSubmit={handleGeneralLogin} className="space-y-3.5 pt-2">
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">E-mail de Acesso</label>
-                  <input
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="cliente@email.com"
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
-                  />
-                </div>
+              {clientModalTab === 'login' ? (
+                <form onSubmit={handleGeneralLogin} className="space-y-3 pt-1">
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">E-mail de Acesso</label>
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="cliente@email.com"
+                      className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Senha de Acesso</label>
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••"
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">Senha de Acesso (se houver)</label>
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••"
+                      className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
-                >
-                  Entrar na Seleção
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
+                  >
+                    Entrar na Seleção
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleGeneralRegister} className="space-y-2.5 pt-1">
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Nome Completo</label>
+                    <input
+                      type="text"
+                      required
+                      value={registerNome}
+                      onChange={(e) => setRegisterNome(e.target.value)}
+                      placeholder="Ex: Amanda Silva"
+                      className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">E-mail</label>
+                    <input
+                      type="email"
+                      required
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      placeholder="seu-email@exemplo.com"
+                      className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Telefone / WhatsApp</label>
+                    <input
+                      type="text"
+                      required
+                      value={registerTelefone}
+                      onChange={(e) => setRegisterTelefone(e.target.value)}
+                      placeholder="(99) 99999-9999"
+                      className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Código da Galeria / Evento</label>
+                    <input
+                      type="text"
+                      required
+                      value={registerGalleryToken}
+                      onChange={(e) => setRegisterGalleryToken(e.target.value)}
+                      placeholder="Ex: casamento-rafaela-augusto"
+                      className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs font-sans focus:outline-none focus:border-stone-900 bg-stone-50/50"
+                    />
+                    <p className="text-[9px] text-stone-400 mt-1">Insira o código ou token que você recebeu do fotógrafo.</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 text-white font-sans text-xs font-bold uppercase tracking-widest rounded transition-all shadow mt-2"
+                  >
+                    Cadastrar e Escolher Fotos
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -2875,14 +3108,16 @@ export default function App() {
 }
 
 function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
+  const allowAutoRegister = event?.permitir_auto_cadastro !== false;
+  const [tab, setTab] = useState(initialClient ? 'login' : (allowAutoRegister ? 'register' : 'login')); // 'register' | 'login'
   const [email, setEmail] = useState(initialClient?.email || '');
   const [name, setName] = useState(initialClient?.nome || '');
   const [phone, setPhone] = useState(initialClient?.telefone || '');
   const [password, setPassword] = useState('');
-  const [step, setStep] = useState(initialClient ? 'password' : 'email'); // 'email' | 'password' | 'register'
+  const [step, setStep] = useState(initialClient ? 'password' : 'form'); // 'form' | 'password'
   const [matchedClient, setMatchedClient] = useState(initialClient || null);
   const [error, setError] = useState('');
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialClient) {
@@ -2890,18 +3125,95 @@ function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAcces
       setName(initialClient.nome || '');
       setPhone(initialClient.telefone || '');
       setMatchedClient(initialClient);
+      setTab('login');
       setStep('password');
     }
   }, [initialClient]);
 
-  const handleEmailSubmit = async (e) => {
+  // Formatação automática amigável para telefone brasileiro (XX) XXXXX-XXXX
+  const handlePhoneChange = (val) => {
+    const raw = val.replace(/\D/g, '');
+    let formatted = raw;
+    if (raw.length > 2 && raw.length <= 6) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2)}`;
+    } else if (raw.length > 6 && raw.length <= 10) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2, 6)}-${raw.slice(6)}`;
+    } else if (raw.length > 10) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2, 7)}-${raw.slice(7, 11)}`;
+    }
+    setPhone(formatted);
+  };
+
+  // Submissão do Autocadastro Rápido (Nome, E-mail, Telefone)
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
+    if (!name.trim() || !email.trim() || !phone.trim()) {
+      setError('Por favor, preencha todos os campos obrigatórios (Nome, E-mail e Telefone).');
+      return;
+    }
+
+    if (event.acesso_restrito && !password.trim()) {
+      setError('Esta galeria exige uma senha. Por favor, defina sua senha de acesso.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+
+      // 1. Verifica se já existe um cliente com este e-mail
+      const existingClient = await onCheckEmail(trimmedEmail);
+      if (existingClient) {
+        // Já possui cadastro no sistema
+        onAssociateClientToEvent(event.id, existingClient.id);
+
+        if (event.acesso_restrito) {
+          setMatchedClient(existingClient);
+          setTab('login');
+          setStep('password');
+          setError('Seu e-mail já está cadastrado. Digite sua senha de acesso para continuar.');
+          return;
+        } else {
+          onAccessSuccess(existingClient);
+          return;
+        }
+      }
+
+      // 2. Criação do novo cliente
+      const newClient = onAddCliente({
+        nome: name.trim(),
+        email: trimmedEmail,
+        telefone: phone.trim(),
+        senha: event.acesso_restrito ? password.trim() : '',
+        origem: 'autocadastro',
+        createdAt: new Date().toISOString()
+      });
+
+      if (newClient && newClient.id) {
+        onAssociateClientToEvent(event.id, newClient.id);
+        onAccessSuccess(newClient);
+      } else {
+        setError('Não foi possível concluir o cadastro. Tente novamente.');
+      }
+    } catch (err) {
+      console.error("[PORTAL REGISTER ERROR]", err);
+      setError('Erro ao realizar cadastro: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Submissão de Login para quem já tem cadastro
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
     if (!email.trim()) return;
 
     const trimmedEmail = email.trim().toLowerCase();
-    setIsCheckingEmail(true);
+    setIsSubmitting(true);
 
     try {
       const foundClient = await onCheckEmail(trimmedEmail);
@@ -2909,10 +3221,8 @@ function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAcces
       if (foundClient) {
         setMatchedClient(foundClient);
         const isPermitted = (event.clientes_permitidos || []).includes(foundClient.id) || event.id_cliente === foundClient.id;
-        
-        // Se já está associado ou se a galeria permite auto-cadastro (o que significa que podemos apenas associá-lo se for existente)
-        if (isPermitted || event.permitir_auto_cadastro) {
-          // Se a associação não existia, cria agora
+
+        if (isPermitted || allowAutoRegister) {
           if (!isPermitted) {
             onAssociateClientToEvent(event.id, foundClient.id);
           }
@@ -2923,56 +3233,25 @@ function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAcces
             onAccessSuccess(foundClient);
           }
         } else {
-          setError('Este e-mail não tem permissão para acessar esta galeria. Solicite acesso ao fotógrafo.');
+          setError('Este e-mail não tem permissão para acessar esta galeria. Solicite liberação ao fotógrafo.');
         }
       } else {
-        // Cliente não encontrado
-        if (event.permitir_auto_cadastro) {
-          setStep('register');
+        if (allowAutoRegister) {
+          setTab('register');
+          setError('E-mail não encontrado. Preencha seus dados para criar seu acesso.');
         } else {
           setError('E-mail não cadastrado para esta galeria. Entre em contato com o fotógrafo.');
         }
       }
     } catch (err) {
-      console.error("[PORTAL EMAIL SUBMIT ERROR]", err);
+      console.error("[PORTAL LOGIN SUBMIT ERROR]", err);
       setError('Erro ao validar acesso. Tente novamente.');
     } finally {
-      setIsCheckingEmail(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleRegisterSubmit = (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (!name.trim() || !phone.trim()) {
-      setError('Por favor, preencha todos os campos obrigatórios.');
-      return;
-    }
-
-    if (event.acesso_restrito && !password.trim()) {
-      setError('Por favor, defina uma senha de acesso.');
-      return;
-    }
-
-    // Criar novo cliente
-    const newClient = onAddCliente({
-      nome: name.trim(),
-      email: email.trim().toLowerCase(),
-      telefone: phone.trim(),
-      senha: event.acesso_restrito ? password.trim() : ''
-    });
-
-    if (newClient && newClient.id) {
-      // Associar ao evento
-      onAssociateClientToEvent(event.id, newClient.id);
-      // Fazer login
-      onAccessSuccess(newClient);
-    } else {
-      setError('Erro ao realizar o cadastro. Tente novamente.');
-    }
-  };
-
+  // Submissão de Senha (quando o evento é restrito por senha)
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -2984,215 +3263,249 @@ function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAcces
     if (passwordMatch) {
       onAccessSuccess(matchedClient);
     } else {
-      setError('Senha de acesso incorreta.');
+      setError('Senha de acesso incorreta. Verifique e tente novamente.');
     }
   };
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col justify-between text-stone-900 font-sans selection:bg-stone-200">
       {/* Top Header Mode indicator */}
-      <div className="bg-stone-100 border-b border-stone-200 px-8 py-2 flex items-center justify-between text-xs text-stone-500">
-        <span>Acesso à Galeria &bull; Identifique-se para continuar</span>
+      <div className="bg-stone-100 border-b border-stone-200 px-6 py-2.5 flex items-center justify-between text-xs text-stone-500">
+        <span className="font-medium">Galeria &bull; <strong className="text-stone-700">{event.titulo}</strong></span>
         <button onClick={onBack} className="underline hover:text-stone-900 font-bold uppercase tracking-wider text-[10px]">
           [ Voltar para Portfólio ]
         </button>
       </div>
 
-      <div className="flex-grow flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border border-stone-200 shadow-xl rounded-xl overflow-hidden animate-scale-in">
+      <div className="flex-grow flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md bg-white border border-stone-200 shadow-xl rounded-2xl overflow-hidden animate-scale-in">
           {/* Decorative Cover Header */}
-          <div className="relative h-24 bg-stone-900 flex items-center justify-center text-center px-4">
-            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=600')] bg-cover bg-center brightness-[0.4]" />
-            <span className="relative z-10 font-serif-editorial text-sm tracking-widest text-white uppercase">{event.titulo}</span>
+          <div className="relative h-28 bg-stone-900 flex flex-col items-center justify-center text-center px-4">
+            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=600')] bg-cover bg-center brightness-[0.35]" />
+            <span className="relative z-10 text-[9px] font-bold uppercase tracking-[0.25em] text-stone-300">Seleção de Fotos</span>
+            <h2 className="relative z-10 font-serif-editorial text-lg text-white font-normal mt-0.5 truncate max-w-xs">{event.titulo}</h2>
           </div>
 
-          {/* Passo 1: Inserir E-mail */}
-          {step === 'email' && (
-            <form onSubmit={handleEmailSubmit} className="p-8 space-y-5">
-              <div className="text-center mb-6">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Acesso Restrito</span>
-                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Identifique-se</h3>
-                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
-                  Digite seu e-mail para visualizar a galeria e iniciar a seleção das fotos.
-                </p>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                  E-mail de Acesso
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu-email@exemplo.com"
-                  className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isCheckingEmail}
-                className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 disabled:bg-stone-400 text-white rounded text-xs font-bold uppercase tracking-widest transition-all mt-3 shadow flex items-center justify-center gap-2"
-              >
-                {isCheckingEmail ? 'Verificando...' : 'Continuar →'}
-              </button>
-            </form>
-          )}
-
-          {/* Passo 2: Inserir Senha */}
-          {step === 'password' && (
-            <form onSubmit={handlePasswordSubmit} className="p-8 space-y-5">
-              <div className="text-center mb-6">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Senha Requerida</span>
-                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Galeria Restrita</h3>
-                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
-                  Olá, <strong>{matchedClient?.nome}</strong>. Esta galeria exige uma senha de segurança para acesso.
-                </p>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                  Senha de Acesso
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Digite sua senha"
-                  className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20 animate-reveal"
-                />
-              </div>
-
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setStep('email'); setPassword(''); setError(''); }}
-                  className="w-1/3 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-550 rounded text-xs font-bold uppercase tracking-widest transition-all"
-                >
-                  Voltar
-                </button>
-                <button
-                  type="submit"
-                  className="w-2/3 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
-                >
-                  Acessar Galeria
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Passo 3: Auto-cadastro */}
-          {step === 'register' && (
-            <form onSubmit={handleRegisterSubmit} className="p-8 space-y-4">
-              <div className="text-center mb-4">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Novo Cadastro</span>
-                <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Criar Acesso</h3>
-                <p className="text-xs text-stone-400 mt-2 leading-relaxed">
-                  Seu e-mail não está cadastrado. Preencha seus dados rápidos para acessar e salvar sua seleção de fotos.
-                </p>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded text-xs font-bold text-red-650 animate-pulse text-center">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                    E-mail
-                  </label>
-                  <input
-                    type="email"
-                    disabled
-                    value={email}
-                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs bg-stone-100 text-stone-400 cursor-not-allowed"
-                  />
+          <div className="p-6 sm:p-8 space-y-4">
+            {step === 'password' ? (
+              /* Passo de Verificação de Senha */
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div className="text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Segurança</span>
+                  <h3 className="font-serif-editorial text-xl font-normal text-stone-850 mt-1">Galeria Restrita</h3>
+                  <p className="text-xs text-stone-400 mt-1">
+                    Olá, <strong>{matchedClient?.nome}</strong>! Digite sua senha para entrar.
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                    Nome Completo
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Seu nome"
-                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                    Telefone / WhatsApp
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(99) 99999-9999"
-                    className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
-                  />
-                </div>
-
-                {event.acesso_restrito && (
-                  <div>
-                    <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                      Definir Senha de Acesso
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Crie uma senha"
-                      className="w-full px-4 py-2 border border-stone-200 rounded text-xs focus:outline-none focus:border-stone-900 bg-stone-50/20"
-                    />
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-650 text-center animate-fade-in">
+                    {error}
                   </div>
                 )}
-              </div>
 
-              <div className="flex gap-2.5 pt-3">
-                <button
-                  type="button"
-                  onClick={() => { setStep('email'); setName(''); setPhone(''); setPassword(''); setError(''); }}
-                  className="w-1/3 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-550 rounded text-xs font-bold uppercase tracking-widest transition-all"
-                >
-                  Voltar
-                </button>
-                <button
-                  type="submit"
-                  className="w-2/3 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
-                >
-                  Cadastrar e Entrar
-                </button>
-              </div>
-            </form>
-          )}
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">
+                    Senha de Acesso
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Digite sua senha"
+                    className="w-full px-4 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                  />
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setStep('form'); setPassword(''); setError(''); }}
+                    className="w-1/3 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-600 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-2/3 py-2.5 bg-stone-900 hover:bg-stone-850 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow"
+                  >
+                    Acessar Galeria
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Formulário Principal: Abas de Autocadastro e Já Sou Cadastrado */
+              <>
+                {/* Abas Alternáveis se o evento permitir autocadastro */}
+                {allowAutoRegister && (
+                  <div className="flex border border-stone-200 rounded-xl p-1 bg-stone-100/70 text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => { setTab('register'); setError(''); }}
+                      className={`flex-1 py-1.5 rounded-lg transition-all text-center text-[10px] font-bold uppercase tracking-wider ${
+                        tab === 'register'
+                          ? 'bg-white text-stone-900 shadow-xs'
+                          : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      Autocadastro Rápido
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setTab('login'); setError(''); }}
+                      className={`flex-1 py-1.5 rounded-lg transition-all text-center text-[10px] font-bold uppercase tracking-wider ${
+                        tab === 'login'
+                          ? 'bg-white text-stone-900 shadow-xs'
+                          : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      Já sou cadastrado
+                    </button>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-650 text-center animate-fade-in">
+                    {error}
+                  </div>
+                )}
+
+                {tab === 'register' && allowAutoRegister ? (
+                  /* Formulário de Autocadastro Rápido */
+                  <form onSubmit={handleRegisterSubmit} className="space-y-3 pt-1">
+                    <div className="text-center mb-3">
+                      <h3 className="font-serif-editorial text-lg text-stone-900">Cadastre-se para escolher suas fotos</h3>
+                      <p className="text-[11px] text-stone-400 mt-1">Preencha seus dados rápidos para salvar suas escolhas de fotos.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">
+                        Nome Completo *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ex: Beatriz Martins"
+                        className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">
+                        E-mail *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="seu-email@exemplo.com"
+                        className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">
+                        Telefone / WhatsApp *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={phone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        placeholder="(11) 98888-7777"
+                        className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                      />
+                    </div>
+
+                    {event.acesso_restrito && (
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">
+                          Definir Senha de Acesso *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Crie sua senha"
+                          className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 disabled:bg-stone-400 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow mt-2 flex items-center justify-center gap-1.5"
+                    >
+                      {isSubmitting ? 'Cadastrando...' : 'Cadastrar e Escolher Fotos →'}
+                    </button>
+
+                    <div className="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setTab('login'); setError(''); }}
+                        className="text-[10px] text-stone-400 hover:text-stone-700 underline font-medium"
+                      >
+                        Já possui acesso? Entrar com e-mail
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Formulário de Identificação / Login Existente */
+                  <form onSubmit={handleLoginSubmit} className="space-y-3.5 pt-1">
+                    <div className="text-center mb-3">
+                      <h3 className="font-serif-editorial text-lg text-stone-900">Identifique-se</h3>
+                      <p className="text-[11px] text-stone-400 mt-1">Informe seu e-mail para abrir a galeria e continuar suas escolhas.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1.5">
+                        E-mail Cadastrado
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="seu-email@exemplo.com"
+                        className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-stone-50/30"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 bg-stone-900 hover:bg-stone-850 disabled:bg-stone-400 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow mt-2 flex items-center justify-center gap-1.5"
+                    >
+                      {isSubmitting ? 'Verificando...' : 'Acessar Galeria →'}
+                    </button>
+
+                    {allowAutoRegister && (
+                      <div className="text-center pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setTab('register'); setError(''); }}
+                          className="text-[10px] text-stone-400 hover:text-stone-700 underline font-medium"
+                        >
+                          Primeira vez aqui? Fazer autocadastro rápido
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Footer Branding */}
-      <div className="py-4 text-center text-[10px] text-stone-400 font-sans border-t border-stone-200/50">
+      <div className="py-3 text-center text-[10px] text-stone-400 font-sans border-t border-stone-200/50">
         Wilkson Fotografias &copy; {new Date().getFullYear()} &bull; Todos os direitos reservados.
       </div>
     </div>

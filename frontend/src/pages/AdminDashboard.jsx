@@ -130,7 +130,7 @@ export default function AdminDashboard({
   const [galleryForm, setGalleryForm] = useState({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
   
   // Configurações avançadas da galeria
-  const [clientMode, setClientMode] = useState('existing'); // 'existing' | 'new'
+  const [clientMode, setClientMode] = useState('none'); // 'none' | 'existing' | 'new'
   const [selectionType, setSelectionType] = useState('limited'); // 'limited' | 'free'
   const [permitirExtras, setPermitirExtras] = useState(false);
   const [valorFotoExtra, setValorFotoExtra] = useState('');
@@ -547,8 +547,12 @@ export default function AdminDashboard({
     let targetClientId = galleryForm.id_cliente;
     let clientObj = null;
 
-    // Se for Novo Cliente cadastrado na hora
-    if (clientMode === 'new') {
+    // Se for Sem Cliente Inicial (Apenas Autocadastro)
+    if (clientMode === 'none') {
+      targetClientId = null;
+      clientObj = null;
+    } else if (clientMode === 'new') {
+      // Se for Novo Cliente cadastrado na hora
       if (!clientForm.nome || !clientForm.email || !clientForm.telefone) return;
       
       // Valida se senha foi fornecida quando o acesso restrito é ativado
@@ -563,7 +567,7 @@ export default function AdminDashboard({
     } else {
       // Se for Cliente Existente selecionado no dropdown
       if (!targetClientId) {
-        alert("Por favor, selecione um cliente cadastrado.");
+        alert("Por favor, selecione um cliente cadastrado ou escolha 'Sem Cliente (Autocadastro)'.");
         return;
       }
 
@@ -637,7 +641,7 @@ export default function AdminDashboard({
     }
     
     setGalleryForm({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
-    setClientMode('existing');
+    setClientMode('none');
     setSelectionType('limited');
     setPermitirExtras(false);
     setValorFotoExtra('');
@@ -663,7 +667,7 @@ export default function AdminDashboard({
       limite_fotos: evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 25
     });
 
-    setClientMode('existing');
+    setClientMode(evento.id_cliente ? 'existing' : 'none');
     setSelectionType(evento.selecao_livre ? 'free' : 'limited');
     setPermirExtrasState(evento);
   };
@@ -733,18 +737,18 @@ export default function AdminDashboard({
     if (!event) return '';
     const link = getShareLink(event.token, client?.id);
     const dateFormatted = formatEventDate(form.prazo || event.data);
-    const senhaText = event.acesso_restrito ? (client?.senha || '123456') : '(Acesso direto por link)';
+    const senhaText = event.acesso_restrito ? (client?.senha || 'Definida no autocadastro') : '(Acesso direto por link)';
     
     let template = customTemplate !== null ? customTemplate : (templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
 
     let obsText = form.observacoes?.trim() ? `${form.observacoes.trim()}\n\n` : '';
 
     template = template
-      .replace(/{nome}/g, client?.nome || '')
+      .replace(/{nome}/g, client?.nome || 'Cliente / Convidado')
       .replace(/{titulo}/g, event.titulo || '')
       .replace(/{prazo}/g, dateFormatted || '')
       .replace(/{link}/g, link || '')
-      .replace(/{email}/g, client?.email || '')
+      .replace(/{email}/g, client?.email || '(Definido no autocadastro)')
       .replace(/{senha}/g, senhaText || '')
       .replace(/{observacoes}/g, obsText);
 
@@ -1351,6 +1355,14 @@ export default function AdminDashboard({
                                     {evento.acesso_restrito ? 'Login + Senha' : 'Link Direto'}
                                   </span>
 
+                                  <span className={`text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                                    evento.permitir_auto_cadastro !== false
+                                      ? 'bg-purple-50 border-purple-200 text-purple-700'
+                                      : 'bg-stone-50 border-stone-200 text-stone-500'
+                                  }`}>
+                                    {evento.permitir_auto_cadastro !== false ? 'Auto-Cadastro Ativo' : 'Cadastro Manual'}
+                                  </span>
+
                                   <span className={`text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                                     computedStatus === 'finalizada'
                                       ? 'bg-emerald-50 border-emerald-250 text-emerald-700 font-bold'
@@ -1393,6 +1405,20 @@ export default function AdminDashboard({
                                 </span>
                               )}
 
+                              {/* Copiar Link Geral para Autocadastro */}
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(evento.token)}
+                                className={`px-2.5 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 border shadow-2xs ${
+                                  copySuccess === evento.token
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-extrabold'
+                                    : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'
+                                }`}
+                                title={`Copiar Link Geral da Galeria (para autocadastro):\n${getShareLink(evento.token)}`}
+                              >
+                                <span>{copySuccess === evento.token ? '✓ Copiado!' : '🔗 Copiar Link'}</span>
+                              </button>
+
                               {/* Upload Rápido */}
                               <button
                                 type="button"
@@ -1431,9 +1457,60 @@ export default function AdminDashboard({
                                 
                                 {/* Coluna 1 (7 cols): Clientes Vinculados & Suas Seleções */}
                                 <div className="lg:col-span-7 space-y-3">
-                                  <div className="flex items-center justify-between pb-1 border-b border-stone-200/60">
+                                  {/* Card Prominente: Link Geral da Galeria */}
+                                  <div className="p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50/30 border border-purple-200/90 rounded-xl space-y-2 shadow-2xs">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-base">🔗</span>
+                                        <div>
+                                          <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-purple-900">
+                                            Link Geral da Galeria (Autocadastro)
+                                          </h4>
+                                        </div>
+                                      </div>
+                                      <span className="text-[8.5px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                                        {evento.permitir_auto_cadastro !== false ? '✨ Autocadastro Ativo' : '🔒 Acesso Restrito'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10.5px] text-purple-900/80 leading-relaxed">
+                                      Envie este link direto para seus clientes ou convidados. Cada pessoa poderá se cadastrar com Nome, E-mail e WhatsApp para selecionar suas fotos:
+                                    </p>
+                                    <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                                      <input
+                                        type="text"
+                                        readOnly
+                                        value={getShareLink(evento.token)}
+                                        className="w-full sm:flex-grow px-2.5 py-1.5 bg-white border border-purple-200 rounded text-xs font-mono text-purple-950 select-all shadow-2xs"
+                                        onClick={(e) => e.target.select()}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(evento.token)}
+                                        className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 flex-shrink-0 cursor-pointer shadow-2xs ${
+                                          copySuccess === evento.token
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-purple-700 hover:bg-purple-850 text-white'
+                                        }`}
+                                      >
+                                        <span>{copySuccess === evento.token ? '✓ Copiado!' : '📋 Copiar Link'}</span>
+                                      </button>
+                                      <a
+                                        href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                                          `Olá! Acesse a galeria "${evento.titulo}" para visualizar e escolher suas fotos: ${getShareLink(evento.token)}`
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 flex-shrink-0 shadow-2xs"
+                                        title="Compartilhar link geral no WhatsApp"
+                                      >
+                                        <span>💬 WhatsApp</span>
+                                      </a>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-between pb-1 border-b border-stone-200/60 pt-1">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                                      Clientes Vinculados & Seleções
+                                      Clientes Cadastrados Nesta Galeria
                                     </span>
                                     <span className="text-[9px] text-stone-400 font-medium">
                                       {associatedClients.length} {associatedClients.length === 1 ? 'cliente' : 'clientes'}
@@ -1441,8 +1518,13 @@ export default function AdminDashboard({
                                   </div>
 
                                   {associatedClients.length === 0 ? (
-                                    <div className="p-4 bg-white border border-stone-200/80 rounded-xl text-center text-xs text-stone-400 italic">
-                                      Nenhum cliente vinculado a esta galeria ainda.
+                                    <div className="p-4 bg-white border border-dashed border-stone-250 rounded-xl text-center space-y-1">
+                                      <p className="text-xs text-stone-700 font-semibold">
+                                        Nenhum cliente cadastrado nesta galeria ainda.
+                                      </p>
+                                      <p className="text-[10.5px] text-stone-400">
+                                        Compartilhe o Link Geral acima. Assim que os clientes ou convidados acessarem e fizerem o autocadastro, eles aparecerão aqui automaticamente com suas seleções individuais!
+                                      </p>
                                     </div>
                                   ) : (
                                     <div className="space-y-2.5">
@@ -1488,9 +1570,16 @@ export default function AdminDashboard({
                                                   ✕
                                                 </button>
                                                 <div className="truncate">
-                                                  <span className="block font-semibold text-stone-850 truncate" title={c.nome}>
-                                                    {c.nome}
-                                                  </span>
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="font-semibold text-stone-850 truncate" title={c.nome}>
+                                                      {c.nome}
+                                                    </span>
+                                                    {c.origem === 'autocadastro' && (
+                                                      <span className="text-[7.5px] font-extrabold uppercase px-1 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                                                        Auto-cadastrado
+                                                      </span>
+                                                    )}
+                                                  </div>
                                                   <span className="text-[9px] text-stone-400 block truncate" title={c.email}>
                                                     {c.email} {c.telefone && `&bull; ${c.telefone}`}
                                                   </span>
@@ -2068,6 +2157,15 @@ export default function AdminDashboard({
               <div className="flex bg-stone-100 p-0.5 rounded border border-stone-200/60 text-[9px] font-bold">
                 <button
                   type="button"
+                  onClick={() => setClientMode('none')}
+                  className={`px-3 py-1 rounded transition-all uppercase flex items-center gap-1 ${
+                    clientMode === 'none' ? 'bg-purple-700 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  <span>✨ Sem Cliente (Autocadastro)</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setClientMode('existing')}
                   className={`px-3 py-1 rounded transition-all uppercase ${
                     clientMode === 'existing' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-400 hover:text-stone-700'
@@ -2086,6 +2184,22 @@ export default function AdminDashboard({
                 </button>
               </div>
             </div>
+
+            {/* Modo 0: Sem Cliente Inicial (Autocadastro) */}
+            {clientMode === 'none' && (
+              <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-lg animate-fade-in space-y-1.5">
+                <div className="flex items-center gap-1.5 text-purple-900 font-bold text-xs">
+                  <span>✨</span>
+                  <span>Galeria Aberta para Autocadastro de Clientes</span>
+                </div>
+                <p className="text-[11px] text-purple-800 leading-relaxed">
+                  Nenhum cliente precisa ser vinculado agora. Ao salvar esta galeria, você receberá um <strong>Link Geral da Galeria</strong> para compartilhar com seus clientes ou convidados (via WhatsApp, grupos ou redes sociais).
+                </p>
+                <p className="text-[10px] text-purple-700 leading-relaxed">
+                  Cada pessoa que acessar o link poderá fazer um <strong>autocadastro rápido</strong> (Nome, E-mail e WhatsApp) e escolher suas fotos de forma totalmente individual e segura.
+                </p>
+              </div>
+            )}
 
             {/* Modo 1: Cliente Existente (Dropdown) */}
             {clientMode === 'existing' && (
@@ -2299,16 +2413,21 @@ export default function AdminDashboard({
                 <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Exigir Login e Senha</span>
               </label>
 
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={permitirAutoCadastro}
-                  onChange={(e) => setPermitirAutoCadastro(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
-                <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Auto-Cadastro</span>
-              </label>
+              <div className="flex flex-col gap-0.5">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={permitirAutoCadastro}
+                    onChange={(e) => setPermitirAutoCadastro(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
+                  <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Permitir Auto-Cadastro de Clientes</span>
+                </label>
+                <span className="text-[10px] text-stone-400 pl-10 leading-tight">
+                  Permite que convidados e clientes façam autocadastro rápido (Nome, E-mail e Telefone) para escolher suas fotos individualmente via link direto.
+                </span>
+              </div>
             </div>
           </div>
 
@@ -2508,7 +2627,7 @@ export default function AdminDashboard({
               onClick={() => {
                 setEditingEventId(null);
                 setGalleryForm({ titulo: '', id_cliente: '', data: '', limite_fotos: 25 });
-                setClientMode('existing');
+                setClientMode('none');
                 setSelectionType('limited');
                 setPermitirExtras(false);
                 setValorFotoExtra('');
@@ -3934,29 +4053,59 @@ export default function AdminDashboard({
                         </div>
                       )}
 
-                      {/* Box com Link Exclusivo do Cliente */}
-                      <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5">
+                      {/* Box com Link Exclusivo do Cliente (quando houver cliente específico) */}
+                      {sharingClient && (
+                        <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-stone-500">
+                              Link Exclusivo de {sharingClient.nome}:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const directLink = getShareLink(sharingEvent.token, sharingClient.id);
+                                navigator.clipboard.writeText(directLink).then(() => {
+                                  setCopySuccess('modal_link');
+                                  setTimeout(() => setCopySuccess(null), 2500);
+                                });
+                              }}
+                              className="text-[9px] font-bold text-stone-850 hover:underline uppercase tracking-wider cursor-pointer"
+                            >
+                              {copySuccess === 'modal_link' ? '✓ Link Copiado!' : 'Copiar Link Exclusivo'}
+                            </button>
+                          </div>
+                          <div className="text-[10px] font-mono text-stone-700 bg-white p-2 rounded border border-stone-200/80 truncate select-all">
+                            {getShareLink(sharingEvent.token, sharingClient.id)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Box com Link Geral para Autocadastro de Clientes / Convidados */}
+                      <div className="p-3.5 bg-purple-50/80 border border-purple-200/90 rounded-lg space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-stone-500">
-                            Link Exclusivo de {sharingClient?.nome || 'Cliente'}:
+                          <span className="text-[9.5px] font-bold uppercase tracking-widest text-purple-900 flex items-center gap-1">
+                            <span>🔗</span> Link Geral da Galeria (Autocadastro):
                           </span>
                           <button
                             type="button"
                             onClick={() => {
-                              const directLink = getShareLink(sharingEvent.token, sharingClient?.id);
-                              navigator.clipboard.writeText(directLink).then(() => {
-                                setCopySuccess('modal_link');
+                              const generalLink = getShareLink(sharingEvent.token);
+                              navigator.clipboard.writeText(generalLink).then(() => {
+                                setCopySuccess('modal_general_link');
                                 setTimeout(() => setCopySuccess(null), 2500);
                               });
                             }}
-                            className="text-[9px] font-bold text-stone-850 hover:underline uppercase tracking-wider cursor-pointer"
+                            className="text-[9px] font-bold text-purple-800 hover:underline uppercase tracking-wider cursor-pointer"
                           >
-                            {copySuccess === 'modal_link' ? '✓ Link Copiado!' : 'Copiar Apenas o Link'}
+                            {copySuccess === 'modal_general_link' ? '✓ Link Geral Copiado!' : 'Copiar Link Geral'}
                           </button>
                         </div>
-                        <div className="text-[10px] font-mono text-stone-700 bg-white p-2 rounded border border-stone-200/80 truncate select-all">
-                          {getShareLink(sharingEvent.token, sharingClient?.id)}
+                        <div className="text-[10.5px] font-mono text-purple-950 bg-white p-2 rounded border border-purple-200/80 truncate select-all">
+                          {getShareLink(sharingEvent.token)}
                         </div>
+                        <p className="text-[9.5px] text-purple-700/90 leading-tight">
+                          Envie este link em grupos de WhatsApp, convites ou QR Code para que convidados/clientes façam o autocadastro e escolham suas fotos.
+                        </p>
                       </div>
                     </div>
                   );
@@ -4111,18 +4260,31 @@ export default function AdminDashboard({
                     onClick={() => {
                       const directLink = getShareLink(sharingEvent.token, sharingClient?.id);
                       navigator.clipboard.writeText(directLink).then(() => {
-                        alert(`Link exclusivo de ${sharingClient?.nome || 'Cliente'} copiado!`);
+                        alert(sharingClient ? `Link exclusivo de ${sharingClient?.nome || 'Cliente'} copiado!` : "Link geral da galeria copiado!");
                       });
                     }}
                     className="py-2.5 px-3 bg-white hover:bg-stone-50 border border-stone-250 text-stone-700 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    title="Copiar apenas o link direto deste cliente"
+                    title={sharingClient ? "Copiar o link exclusivo deste cliente" : "Copiar o link geral da galeria"}
                   >
-                    <span>🔗 Copiar Link</span>
+                    <span>🔗 {sharingClient ? 'Copiar Link' : 'Copiar Link Geral'}</span>
                   </button>
                   
                   {(() => {
                     const client = sharingClient;
-                    if (!client || !client.telefone) return null;
+                    if (!client || !client.telefone) {
+                      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareForm.customMessage)}`;
+                      return (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-widest shadow transition-colors flex items-center justify-center gap-1.5 text-center cursor-pointer"
+                          title="Enviar mensagem via WhatsApp (escolha o contato ou grupo)"
+                        >
+                          <span>💬 WhatsApp Geral</span>
+                        </a>
+                      );
+                    }
                     
                     const cleanPhone = client.telefone.replace(/\D/g, '');
                     const formattedPhone = cleanPhone.length === 10 || cleanPhone.length === 11 ? '55' + cleanPhone : cleanPhone;

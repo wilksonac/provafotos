@@ -2958,13 +2958,21 @@ export default function AdminDashboard({
               <button
                 type="button"
                 onClick={async () => {
+                  const cleanedToken = (contatoForm.mercado_pago_token || '').trim();
+                  try {
+                    localStorage.setItem('mercado_pago_token', cleanedToken);
+                    localStorage.setItem('mercado_pago_ativo', JSON.stringify(contatoForm.mercado_pago_ativo !== false));
+                  } catch (e) {}
+
                   if (onSaveContato) {
                     try {
-                      await onSaveContato(contatoForm);
+                      await onSaveContato({ ...contatoForm, mercado_pago_token: cleanedToken });
                       alert("✓ Configurações do Mercado Pago salvas com sucesso!");
                     } catch (err) {
                       alert("Erro ao salvar configurações do Mercado Pago: " + err.message);
                     }
+                  } else {
+                    alert("✓ Token salvo com sucesso localmente!");
                   }
                 }}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-sans text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"

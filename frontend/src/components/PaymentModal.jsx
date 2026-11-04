@@ -16,7 +16,9 @@ export default function PaymentModal({
   mercadoPagoToken = ''
 }) {
   const extraCount = Math.max(0, selectedCount - (limiteFotos || 0));
-  const totalAmount = extraCount * (parseFloat(valorFotoExtra) || 0);
+  const valorUnitario = parseFloat(valorFotoExtra) || 0;
+  const totalAmount = extraCount * valorUnitario;
+  const effectiveToken = (mercadoPagoToken || (typeof window !== 'undefined' ? localStorage.getItem('mercado_pago_token') : '') || '').trim();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -30,10 +32,32 @@ export default function PaymentModal({
 
   // Inicializa o pagamento ao abrir o modal
   useEffect(() => {
-    if (!isOpen || totalAmount <= 0) {
+    if (!isOpen) {
       setPixData(null);
       setIsApproved(false);
       setError(null);
+      return;
+    }
+
+    if (totalAmount <= 0) {
+      setPixData(null);
+      setIsApproved(false);
+      setLoading(false);
+      if (extraCount > 0 && valorUnitario <= 0) {
+        setError('O valor por foto adicional não foi definido na galeria. Acesse o Painel do Fotógrafo > Galerias, edite esta galeria e preencha o campo "Valor por foto extra" (ex: R$ 5,00).');
+      } else if (extraCount <= 0) {
+        setError('Nenhuma foto excedente ao limite do pacote foi selecionada.');
+      } else {
+        setError('Valor total de extras inválido (R$ 0,00).');
+      }
+      return;
+    }
+
+    if (!effectiveToken) {
+      setPixData(null);
+      setIsApproved(false);
+      setLoading(false);
+      setError('Token de Acesso do Mercado Pago não configurado. Por favor, acesse o Painel > aba 💳 Pagamento PIX, cole o seu Access Token e clique em Salvar.');
       return;
     }
 
@@ -46,9 +70,9 @@ export default function PaymentModal({
       const res = await createPixPayment({
         amount: totalAmount,
         description: `Fotos Extras (${extraCount} fotos) - ${evento?.titulo || 'Galeria'}`,
-        payerEmail: cliente?.email || 'cliente@fotografia.com',
+        payerEmail: cliente?.email || 'cliente.pagador@gmail.com',
         payerName: cliente?.nome || 'Cliente',
-        accessToken: mercadoPagoToken,
+        accessToken: effectiveToken,
         externalReference: `${evento?.id || 'evt'}_${cliente?.id || 'cli'}_${Date.now()}`
       });
 
@@ -69,7 +93,7 @@ export default function PaymentModal({
       isMounted = false;
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [isOpen, totalAmount, evento?.id, cliente?.id, mercadoPagoToken]);
+  }, [isOpen, totalAmount, extraCount, valorUnitario, effectiveToken, evento?.id, cliente?.id]);
 
   // Polling automático para verificar se o PIX foi pago (a cada 3.5 segundos)
   useEffect(() => {

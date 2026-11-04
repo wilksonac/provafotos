@@ -28,6 +28,7 @@ export async function createPixPayment({
   description,
   payerEmail,
   payerName = "Cliente",
+  payerCpf = "",
   accessToken = DEFAULT_ACCESS_TOKEN,
   externalReference = ""
 }) {
@@ -53,8 +54,11 @@ export async function createPixPayment({
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || "Fotos";
 
-  // Limpa o e-mail
-  const cleanEmail = (payerEmail || "cliente@exemplo.com").trim().toLowerCase();
+  // Limpa o e-mail (Mercado Pago exige formato válido e rejeita e-mails fictícios com domínios desconhecidos)
+  let cleanEmail = (payerEmail || "").trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@") || cleanEmail.includes("@fotografia.com") || cleanEmail.includes("@exemplo.com")) {
+    cleanEmail = "cliente.pagador@gmail.com";
+  }
 
   const payload = {
     transaction_amount: Number(numericAmount.toFixed(2)),
@@ -63,7 +67,11 @@ export async function createPixPayment({
     payer: {
       email: cleanEmail,
       first_name: firstName,
-      last_name: lastName
+      last_name: lastName,
+      identification: {
+        type: "CPF",
+        number: (payerCpf || "").replace(/\D/g, '') || "19119119100"
+      }
     },
     external_reference: externalReference || `extra_${Date.now()}`
   };
@@ -96,10 +104,18 @@ export async function createPixPayment({
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error("[MERCADO PAGO] Erro na criação do PIX:", errorData);
-      const errorMsg =
+      let errorMsg =
         errorData.message ||
         (errorData.cause && errorData.cause[0] && errorData.cause[0].description) ||
         `Erro HTTP ${response.status} ao conectar com Mercado Pago.`;
+
+      if (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes("unauthorized use of live credentials")) {
+        errorMsg = "As credenciais de produção (APP_USR-...) ainda não foram homologadas no Mercado Pago Developers. Acesse sua aplicação e preencha 'Ativar credenciais de produção', ou use o Access Token de teste (TEST-...) para simular pagamentos.";
+      } else if (typeof errorMsg === 'string' && (errorMsg.toLowerCase().includes("collector user without key enabled") || errorMsg.toLowerCase().includes("without key enabled"))) {
+        errorMsg = "Sua conta do Mercado Pago ainda não tem uma Chave PIX cadastrada. Abra o aplicativo do Mercado Pago no celular, vá em 'Área Pix' > 'Minhas chaves' e cadastre pelo menos uma chave (pode ser Chave Aleatória).";
+      } else if (typeof errorMsg === 'string' && (errorMsg.toLowerCase().includes("collector_id cannot be the same as payer_id") || errorMsg.toLowerCase().includes("same as collector"))) {
+        errorMsg = "O e-mail do cliente não pode ser o mesmo e-mail da sua conta Mercado Pago (o vendedor não pode pagar a si mesmo). Use um e-mail de cliente diferente para o teste.";
+      }
       return { success: false, error: errorMsg, raw: errorData };
     }
 

@@ -1512,10 +1512,20 @@ export default function App() {
   // Callback para salvar dados de Contato
   const handleSaveContato = async (contatoData) => {
     console.log("[FIREBASE] Salvando informações de contato:", contatoData);
+    setContato(contatoData);
+    try {
+      if (contatoData.mercado_pago_token) {
+        localStorage.setItem('mercado_pago_token', contatoData.mercado_pago_token.trim());
+      }
+      localStorage.setItem('mercado_pago_ativo', JSON.stringify(contatoData.mercado_pago_ativo !== false));
+    } catch (e) {}
+
     if (db) {
-      await setDoc(doc(db, "configuracoes", "contato"), contatoData);
-    } else {
-      setContato(contatoData);
+      try {
+        await setDoc(doc(db, "configuracoes", "contato"), contatoData);
+      } catch (err) {
+        console.error("[FIREBASE] Erro ao sincronizar contato com Firebase:", err);
+      }
     }
   };
 

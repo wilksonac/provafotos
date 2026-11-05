@@ -9,7 +9,7 @@ const DEFAULT_ACCESS_TOKEN = import.meta.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || "
  * Retorna a base URL da API Mercado Pago (usando proxy local ou direto)
  */
 function getApiBaseUrl() {
-  // Em desenvolvimento ou ambientes com proxy do Vite
+  // Em desenvolvimento ou ambientes com proxy do Vite / Vercel
   return "/api-mercadopago";
 }
 
@@ -20,6 +20,7 @@ function getApiBaseUrl() {
  * @param {string} params.description - Descrição do pagamento (ex: "Fotos Extras - Galeria Casamento")
  * @param {string} params.payerEmail - E-mail do pagador
  * @param {string} [params.payerName] - Nome completo do pagador
+ * @param {string} [params.payerCpf] - CPF do pagador
  * @param {string} [params.accessToken] - Token de acesso do Mercado Pago (se omitido, usa o padrão do .env)
  * @param {string} [params.externalReference] - Referência externa (ex: id_evento_id_cliente)
  */
@@ -92,6 +93,15 @@ export async function createPixPayment({
         headers,
         body: JSON.stringify(payload)
       });
+      // Se a rota proxy retornar 404 ou 405 (ex: proxy indisponível), tenta conexão direta
+      if (!response.ok && (response.status === 404 || response.status === 405)) {
+        console.warn(`[MERCADO PAGO] Proxy retornou HTTP ${response.status}, tentando API direta...`);
+        response = await fetch("https://api.mercadopago.com/v1/payments", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        });
+      }
     } catch (proxyErr) {
       console.warn("[MERCADO PAGO] Falha na rota proxy, tentando API direta...", proxyErr);
       response = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -169,6 +179,13 @@ export async function checkPixPaymentStatus({ paymentId, accessToken = DEFAULT_A
 
     try {
       response = await fetch(proxyUrl, { method: "GET", headers });
+      if (!response.ok && (response.status === 404 || response.status === 405)) {
+        console.warn(`[MERCADO PAGO] Consulta via proxy retornou HTTP ${response.status}, tentando API direta...`);
+        response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          method: "GET",
+          headers
+        });
+      }
     } catch (proxyErr) {
       response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         method: "GET",

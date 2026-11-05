@@ -3,6 +3,10 @@
     {
       "source": "/api-brevo",
       "destination": "https://api.brevo.com/v3/smtp/email"
+    },
+    {
+      "source": "/api-mercadopago/:path*",
+      "destination": "https://api.mercadopago.com/:path*"
     }
   ]
 }

@@ -601,7 +601,7 @@ export default function AdminDashboard({
         titulo: galleryForm.titulo,
         id_cliente: targetClientId,
         data: galleryForm.data,
-        limite_fotos: selectionType === 'limited' ? galleryForm.limite_fotos : null,
+        limite_fotos: selectionType === 'limited' ? (galleryForm.limite_fotos === '' ? 0 : parseInt(galleryForm.limite_fotos, 10)) : null,
         selecao_livre: selectionType === 'free',
         permitir_extras: selectionType === 'limited' ? permitirExtras : false,
         valor_foto_extra: selectionType === 'limited' && permitirExtras && valorFotoExtra ? parseFloat(valorFotoExtra) : null,
@@ -624,7 +624,7 @@ export default function AdminDashboard({
         titulo: galleryForm.titulo,
         id_cliente: targetClientId,
         data: galleryForm.data,
-        limite_fotos: selectionType === 'limited' ? galleryForm.limite_fotos : null,
+        limite_fotos: selectionType === 'limited' ? (galleryForm.limite_fotos === '' ? 0 : parseInt(galleryForm.limite_fotos, 10)) : null,
         selecao_livre: selectionType === 'free',
         permitir_extras: selectionType === 'limited' ? permitirExtras : false,
         valor_foto_extra: selectionType === 'limited' && permitirExtras && valorFotoExtra ? parseFloat(valorFotoExtra) : null,
@@ -1626,7 +1626,7 @@ export default function AdminDashboard({
                                                       eventId={evento.id}
                                                       clientId={c.id}
                                                       initialValue={activeSel?.limite_fotos}
-                                                      placeholder={String(evento.limite_fotos || 'Sem limite')}
+                                                      placeholder={String(evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 'Sem limite')}
                                                       onUpdate={onUpdateClientSelectionLimit}
                                                     />
                                                   </div>
@@ -1660,8 +1660,8 @@ export default function AdminDashboard({
 
                                             {/* Bloco de Pagamento de Fotos Extras do Cliente */}
                                             {(() => {
-                                              const clientLimit = activeSel?.limite_fotos !== undefined && activeSel?.limite_fotos !== null ? activeSel.limite_fotos : (evento.limite_fotos || 0);
-                                              const clientExtrasCount = !evento.selecao_livre && clientLimit > 0 ? Math.max(0, selecionadasCount - clientLimit) : 0;
+                                              const clientLimit = activeSel?.limite_fotos !== undefined && activeSel?.limite_fotos !== null ? activeSel.limite_fotos : (evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 0);
+                                              const clientExtrasCount = !evento.selecao_livre && clientLimit !== null && clientLimit !== undefined ? Math.max(0, selecionadasCount - clientLimit) : 0;
                                               const clientExtrasPaid = activeSel?.pagamento_extras_confirmado || (evento.selecoes_clientes && evento.selecoes_clientes[c.id]?.pagamento_extras_confirmado) || evento.pagamento_extras_confirmado;
                                               const pixTx = activeSel?.transacao_pix || (evento.selecoes_clientes && evento.selecoes_clientes[c.id]?.transacao_pix);
 
@@ -1800,7 +1800,7 @@ export default function AdminDashboard({
                                       associatedClients={associatedClients}
                                       onAssociate={(clientId, customLimit, customExtras) => {
                                         onAssociateClientToEvent(evento.id, clientId);
-                                        if (customLimit) {
+                                        if (customLimit !== '' && customLimit !== null && customLimit !== undefined) {
                                           onUpdateClientSelectionLimit(evento.id, clientId, customLimit);
                                         }
                                         onUpdateClientSelectionExtras(evento.id, clientId, customExtras);
@@ -1808,7 +1808,7 @@ export default function AdminDashboard({
                                       onAddAndAssociate={(newClientData, customLimit, customExtras) => {
                                         const newClient = onAddCliente(newClientData);
                                         onAssociateClientToEvent(evento.id, newClient.id);
-                                        if (customLimit) {
+                                        if (customLimit !== '' && customLimit !== null && customLimit !== undefined) {
                                           onUpdateClientSelectionLimit(evento.id, newClient.id, customLimit);
                                         }
                                         onUpdateClientSelectionExtras(evento.id, newClient.id, customExtras);
@@ -1829,7 +1829,7 @@ export default function AdminDashboard({
                                       <div>
                                         <span className="text-stone-400 block text-[9px] uppercase font-bold">Limite Geral:</span>
                                         <span className="font-semibold text-stone-800">
-                                          {evento.selecao_livre ? 'Seleção Livre' : `${evento.limite_fotos || 25} fotos`}
+                                          {evento.selecao_livre ? 'Seleção Livre' : `${evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 25} fotos`}
                                         </span>
                                       </div>
 
@@ -2397,14 +2397,14 @@ export default function AdminDashboard({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                      Limite de Fotos
+                      Limite de Fotos <span className="text-[9px] text-stone-400 font-normal lowercase">(0 = todas pagas)</span>
                     </label>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       required={selectionType === 'limited'}
                       value={galleryForm.limite_fotos}
-                      onChange={(e) => setGalleryForm({ ...galleryForm, limite_fotos: parseInt(e.target.value) })}
+                      onChange={(e) => setGalleryForm({ ...galleryForm, limite_fotos: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) })}
                       className="w-full px-4 py-2 border border-stone-200 rounded text-sm focus:outline-none focus:border-stone-900 bg-white"
                     />
                   </div>
@@ -5210,7 +5210,7 @@ function ClientLimitInput({ eventId, clientId, initialValue, placeholder, onUpda
   return (
     <input
       type="number"
-      min="1"
+      min="0"
       value={val}
       onChange={handleChange}
       onBlur={handleBlurOrEnter}
@@ -5369,8 +5369,8 @@ function InlineAssociateClient({ evento, clientes, associatedClients, onAssociat
             <label className="block text-[9px] font-bold uppercase tracking-widest text-stone-400">Limite de Fotos</label>
             <input
               type="number"
-              min="1"
-              placeholder={`Geral (${evento.limite_fotos || 'Sem limite'})`}
+              min="0"
+              placeholder={`Geral (${evento.limite_fotos !== undefined && evento.limite_fotos !== null ? evento.limite_fotos : 'Sem limite'})`}
               value={limiteFotos}
               onChange={(e) => setLimiteFotos(e.target.value)}
               className="w-full p-1.5 border border-stone-200 rounded focus:outline-none focus:border-stone-900 bg-white"

@@ -370,27 +370,74 @@ export default function PhotoVirtualGrid({
     };
   }, [isAdmin, triggerSecurityWarning]);
 
-  // Estados para simulação de download
+  // Estados de download
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [paidLocally, setPaidLocally] = useState(false);
 
-  const handleDownloadZIP = useCallback(() => {
+  const handleDownloadZIP = useCallback(async () => {
+    const selected = (photos || []).filter((p) => p.selecionada && p.url_storage);
+    if (selected.length === 0) {
+      alert('Nenhuma foto selecionada para baixar.');
+      return;
+    }
+
     setIsDownloading(true);
     setDownloadProgress(0);
-    const interval = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsDownloading(false);
-            alert(`Sucesso! Suas ${selectedCount} fotos favoritas foram baixadas em alta resolução (Arquivo .ZIP).`);
-          }, 600);
-          return 100;
-        }
-        return prev + Math.floor(Math.random() * 25) + 15;
+
+    const safeTitle = String(tituloEvent || 'galeria').replace(/[^\w\-]+/g, '_');
+    const extOf = (url, blobType) => {
+      const m = String(url).split('?')[0].match(/\.(jpe?g|png|webp|gif)$/i);
+      if (m) return m[1].toLowerCase();
+      if (blobType && blobType.includes('/')) return blobType.split('/')[1].replace('jpeg', 'jpg');
+      return 'jpg';
+    };
+
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      let done = 0;
+
+      for (let i = 0; i < selected.length; i++) {
+        const photo = selected[i];
+        const res = await fetch(photo.url_storage);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const base = String(photo.name || `foto_${i + 1}`).replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '_');
+        zip.file(`${String(i + 1).padStart(3, '0')}_${base}.${extOf(photo.url_storage, blob.type)}`, blob);
+        done++;
+        setDownloadProgress(Math.round((done / selected.length) * 90));
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' }, (meta) => {
+        setDownloadProgress(90 + Math.round(meta.percent / 10));
       });
-    }, 150);
-  }, [selectedCount]);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = `${safeTitle}_fotos_selecionadas.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+      setDownloadProgress(100);
+    } catch (err) {
+      console.warn('[DOWNLOAD] ZIP indisponível, baixando fotos individualmente:', err);
+      // Fallback: dispara o download de cada foto separadamente
+      for (let i = 0; i < selected.length; i++) {
+        const link = document.createElement('a');
+        link.href = selected[i].url_storage;
+        link.download = selected[i].name || `foto_${i + 1}.jpg`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    } finally {
+      setTimeout(() => setIsDownloading(false), 600);
+    }
+  }, [photos, tituloEvent]);
 
   // Mapeamento dinâmico de imagem de capa premium baseado no tipo de galeria
   const coverImage = useMemo(() => {
@@ -504,9 +551,13 @@ export default function PhotoVirtualGrid({
       const nextState = !targetPhoto.selecionada;
       
       // Validação de Limite
-      if (nextState && !selecaoLivre && limiteFotos && currentSelectedCount >= limiteFotos) {
+      if (nextState && !selecaoLivre && (limiteFotos !== null && limiteFotos !== undefined) && currentSelectedCount >= limiteFotos) {
         if (!permitirExtras) {
-          alert(`Você atingiu o limite de seleção de ${limiteFotos} fotos.`);
+          if (limiteFotos === 0) {
+            alert('Esta galeria não inclui fotos gratuitas e a contratação de fotos extras não está habilitada.');
+          } else {
+            alert(`Você atingiu o limite de seleção de ${limiteFotos} fotos.`);
+          }
           return prevPhotos;
         }
       }
@@ -576,8 +627,11 @@ export default function PhotoVirtualGrid({
     isMobile
   ]);
 
-  const isLimitReached = !selecaoLivre && limiteFotos && selectedCount >= limiteFotos;
-  const isDownloadBlocked = permitirDownload && !selecaoLivre && limiteFotos !== null && selectedCount > limiteFotos && !pagamentoExtrasConfirmado;
+  const isLimitReached = !selecaoLivre && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount >= limiteFotos;
+  const isPaid = !!pagamentoExtrasConfirmado || paidLocally;
+  const isDownloadBlocked = !selecaoLivre && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && !isPaid;
+  // Download liberado quando o fotógrafo permitiu OU quando o cliente já pagou os extras via PIX
+  const canDownload = (permitirDownload || isPaid) && selectedCount > 0;
 
   // Formata data do padrão americano AAAA-MM-DD para o padrão brasileiro DD/MM/AAAA
   const formattedDate = useMemo(() => {
@@ -742,8 +796,8 @@ export default function PhotoVirtualGrid({
                 {currentStatus === 'ativa' ? 'Favoritas' : 'Escolhidas'}
               </span>
               <span className="text-sm font-extrabold text-stone-900 whitespace-nowrap">
-                {selectedCount}<span className="text-stone-300 font-medium px-0.5">/</span>{limiteFotos || '∞'}
-                {currentStatus === 'ativa' && permitirExtras && limiteFotos && selectedCount > limiteFotos && (
+                {selectedCount}<span className="text-stone-300 font-medium px-0.5">/</span>{(limiteFotos !== null && limiteFotos !== undefined) ? limiteFotos : '∞'}
+                {currentStatus === 'ativa' && permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && (
                   <span className="text-amber-600 font-bold ml-1 text-[10px]">
                     (+{selectedCount - limiteFotos})
                   </span>
@@ -761,8 +815,8 @@ export default function PhotoVirtualGrid({
                 <div className="flex items-center justify-between mb-1.5 gap-4">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
                   <span className="text-xs font-bold text-stone-950 whitespace-nowrap">
-                    {selectedCount} <span className="text-stone-400 font-medium">de</span> {limiteFotos}
-                    {permitirExtras && selectedCount > limiteFotos && (
+                    {selectedCount} <span className="text-stone-400 font-medium">de</span> {(limiteFotos !== null && limiteFotos !== undefined) ? limiteFotos : 'livre'}
+                    {permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && (
                       <span className="text-amber-600 font-extrabold ml-1">
                         {' '}
                         (+{selectedCount - limiteFotos} extras
@@ -778,7 +832,7 @@ export default function PhotoVirtualGrid({
                     className={`h-full transition-all duration-500 ${
                       isLimitReached && !permitirExtras ? 'bg-amber-600' : 'bg-stone-900'
                     }`}
-                    style={{ width: `${Math.min(100, (selectedCount / (limiteFotos || 1)) * 100)}%` }}
+                    style={{ width: `${limiteFotos === 0 ? (selectedCount > 0 ? 100 : 0) : Math.min(100, (selectedCount / (limiteFotos || 1)) * 100)}%` }}
                   ></div>
                 </div>
               </div>
@@ -810,8 +864,8 @@ export default function PhotoVirtualGrid({
               💬 WhatsApp
             </a>
 
-            {/* Download Button (If permitted) */}
-            {permitirDownload && (
+            {/* Download Button (se permitido ou se o PIX dos extras foi pago) */}
+            {canDownload && (
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 <button
                   onClick={() => !isDownloadBlocked && !isDownloading && handleDownloadZIP()}
@@ -827,11 +881,16 @@ export default function PhotoVirtualGrid({
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  {isDownloading ? `Baixando ${downloadProgress}%` : 'Baixar ZIP'}
+                  {isDownloading ? `Baixando ${downloadProgress}%` : 'Baixar Fotos'}
                 </button>
                 {isDownloadBlocked && (
                   <span className="text-[7.5px] font-extrabold text-red-600 bg-red-50/50 px-2 py-0.5 rounded uppercase tracking-wider block max-w-[200px] text-right leading-tight border border-red-100/30">
                     Pgto pendente
+                  </span>
+                )}
+                {paidLocally && !isDownloading && (
+                  <span className="text-[7.5px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase tracking-wider block text-right leading-tight border border-emerald-200">
+                    ✓ Pagamento confirmado
                   </span>
                 )}
               </div>
@@ -862,8 +921,12 @@ export default function PhotoVirtualGrid({
                 <>Você selecionou <span className="text-stone-900 font-bold">{selectedCount}</span> fotos.</>
               ) : (
                 <>
-                  Você escolheu <span className="text-stone-900 font-bold">{selectedCount}</span> de <span className="text-stone-900 font-bold">{limiteFotos}</span> fotos.
-                  {permitirExtras && selectedCount > limiteFotos && (
+                  {limiteFotos === 0 ? (
+                    <>Você escolheu <span className="text-stone-900 font-bold">{selectedCount}</span> fotos (todas como extras).</>
+                  ) : (
+                    <>Você escolheu <span className="text-stone-900 font-bold">{selectedCount}</span> de <span className="text-stone-900 font-bold">{limiteFotos}</span> fotos.</>
+                  )}
+                  {permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && (
                     <span className="block mt-1.5 text-amber-600 font-bold">
                       Você escolheu {selectedCount - limiteFotos} fotos adicionais.
                       {valorFotoExtra && valorFotoExtra > 0 && ` Valor extra a pagar: R$ ${((selectedCount - limiteFotos) * valorFotoExtra).toFixed(2).replace('.', ',')}`}
@@ -883,7 +946,7 @@ export default function PhotoVirtualGrid({
               </button>
               <button
                 onClick={() => {
-                  const hasExtrasPending = permitirExtras && limiteFotos && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado;
+                  const hasExtrasPending = permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado;
                   if (hasExtrasPending) {
                     setShowConfirmModal(false);
                     setIsPaymentModalOpen(true);
@@ -893,7 +956,7 @@ export default function PhotoVirtualGrid({
                 }}
                 className="px-5 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-[10px] font-bold uppercase tracking-widest transition-all"
               >
-                {permitirExtras && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado
+                {permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && valorFotoExtra > 0 && !pagamentoExtrasConfirmado
                   ? 'Pagar PIX e Finalizar'
                   : 'Confirmar e Enviar'}
               </button>
@@ -907,6 +970,7 @@ export default function PhotoVirtualGrid({
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         onPaymentSuccess={(paymentRes) => {
+          setPaidLocally(true);
           setIsPaymentModalOpen(false);
           if (onPaymentSuccess) {
             onPaymentSuccess(paymentRes);

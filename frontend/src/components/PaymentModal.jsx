@@ -15,7 +15,7 @@ export default function PaymentModal({
   valorFotoExtra,
   mercadoPagoToken = ''
 }) {
-  const extraCount = Math.max(0, selectedCount - (limiteFotos || 0));
+  const extraCount = Math.max(0, selectedCount - (limiteFotos ?? 0));
   const valorUnitario = parseFloat(valorFotoExtra) || 0;
   const totalAmount = extraCount * valorUnitario;
   const effectiveToken = (mercadoPagoToken || (typeof window !== 'undefined' ? localStorage.getItem('mercado_pago_token') : '') || '').trim();
@@ -235,7 +235,7 @@ export default function PaymentModal({
               <div className="p-3.5 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
                 <div className="flex items-center justify-between text-stone-500">
                   <span>Fotos do Pacote (Contratadas):</span>
-                  <span className="font-semibold text-stone-800">{limiteFotos} fotos</span>
+                  <span className="font-semibold text-stone-800">{limiteFotos === 0 ? '0 fotos (nenhuma inclusa)' : `${limiteFotos} fotos`}</span>
                 </div>
                 <div className="flex items-center justify-between text-stone-500">
                   <span>Total de Fotos Escolhidas:</span>

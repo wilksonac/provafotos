@@ -1111,6 +1111,7 @@ export default function App() {
     const updatePayload = { pagamento_extras_confirmado: true };
     if (clientId) {
       updatePayload[`selecoes_clientes.${clientId}.pagamento_extras_confirmado`] = true;
+      updatePayload[`selecoes_clientes.${clientId}.transacao_pix`] = { metodo: 'manual', dateApproved: new Date().toISOString(), confirmado_por: 'fotografo' };
     }
 
     if (db) {
@@ -1126,7 +1127,8 @@ export default function App() {
           if (clientId && updatedSelections[clientId]) {
             updatedSelections[clientId] = {
               ...updatedSelections[clientId],
-              pagamento_extras_confirmado: true
+              pagamento_extras_confirmado: true,
+              transacao_pix: updatedSelections[clientId].transacao_pix || { metodo: 'manual', dateApproved: new Date().toISOString(), confirmado_por: 'fotografo' }
             };
           }
           return {
@@ -1164,6 +1166,24 @@ export default function App() {
   const handlePaymentSuccess = (eventId, clientId, paymentData) => {
     console.log("[PAYMENT] Pagamento PIX aprovado via Mercado Pago:", paymentData);
     handleConfirmPayment(eventId, clientId);
+    const pixPayload = {
+      paymentId: paymentData.paymentId || null,
+      amount: paymentData.amount || null,
+      dateApproved: paymentData.dateApproved || new Date().toISOString(),
+      metodo: 'pix'
+    };
+    setEventos((prev) =>
+      prev.map((e) => {
+        if (e.id === eventId) {
+          const sc = { ...(e.selecoes_clientes || {}) };
+          if (clientId) {
+            sc[clientId] = { ...(sc[clientId] || {}), pagamento_extras_confirmado: true, transacao_pix: pixPayload };
+          }
+          return { ...e, pagamento_extras_confirmado: true, transacao_pix: pixPayload, selecoes_clientes: sc };
+        }
+        return e;
+      })
+    );
 
     if (db && clientId) {
       updateDoc(doc(db, "eventos", eventId), {

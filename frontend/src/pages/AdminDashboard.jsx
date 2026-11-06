@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PaymentReport from '../components/PaymentReport';
 
 const getEventStatus = (evento) => {
   if (evento.status === 'finalizada') return 'finalizada';
@@ -938,7 +939,7 @@ export default function AdminDashboard({
                     : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/70'
                 }`}
               >
-                <span>💳</span> Pagamento PIX
+                <span>💳</span> Pagamentos & Relatórios
               </button>
             </>
           ) : (
@@ -2863,125 +2864,17 @@ export default function AdminDashboard({
 
       {/* Sub-tab: Pagamento PIX Automático (Mercado Pago) */}
       {activeSubTab === 'pagamento' && (
-        <div className="animate-scale-in max-w-2xl mx-auto space-y-6">
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-stone-200/80 shadow-sm space-y-6">
-            <div className="border-b border-stone-150 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">💳</span>
-                  <h3 className="font-serif-editorial text-xl text-stone-900">Mercado Pago • PIX Automático</h3>
-                </div>
-                <p className="text-xs text-stone-500 mt-1">
-                  Receba os pagamentos de fotos extras automaticamente com baixa instantânea via PIX direto na sua conta.
-                </p>
-              </div>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border w-fit ${
-                contatoForm.mercado_pago_token ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'
-              }`}>
-                {contatoForm.mercado_pago_token ? '✓ Ativo / Configurado' : '⚠️ Token Pendente'}
-              </span>
-            </div>
-
-            <div className="space-y-5">
-              {/* Switch de Ativação */}
-              <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl border border-stone-200/80">
-                <div>
-                  <span className="text-sm font-bold text-stone-900 block">Cobrança Automática via PIX</span>
-                  <span className="text-xs text-stone-500 block mt-0.5">
-                    Gera QR Code e chave Copia e Cola em tempo real quando o cliente selecionar fotos além do limite
-                  </span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={contatoForm.mercado_pago_ativo !== false}
-                    onChange={(e) => setContatoForm({ ...contatoForm, mercado_pago_ativo: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                </label>
-              </div>
-
-              {/* Campo Access Token */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-stone-700">
-                    Access Token do Mercado Pago
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowMercadoPagoToken(!showMercadoPagoToken)}
-                    className="text-[10px] font-bold text-stone-500 hover:text-stone-900 uppercase tracking-wider cursor-pointer"
-                  >
-                    {showMercadoPagoToken ? '👁️ Ocultar' : '👁️ Exibir Token'}
-                  </button>
-                </div>
-                <input
-                  type={showMercadoPagoToken ? 'text' : 'password'}
-                  placeholder="APP_USR-0000000000000000-000000-00000000000000000000000000000000-000000000"
-                  value={contatoForm.mercado_pago_token || ''}
-                  onChange={(e) => setContatoForm({ ...contatoForm, mercado_pago_token: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-stone-50/50"
-                />
-                <p className="text-[11px] text-stone-500">
-                  Insira o <strong>Access Token</strong> de Produção (para receber valores reais) ou de Teste do Mercado Pago.
-                </p>
-              </div>
-
-              {/* Passo a passo ilustrado e link direto */}
-              <div className="p-4 bg-sky-50/70 border border-sky-200 rounded-xl space-y-2 text-xs text-sky-950">
-                <div className="flex items-center gap-2 font-bold text-[11px] uppercase tracking-wider text-sky-900">
-                  <span>📖</span> Como cadastrar e obter o Token no Mercado Pago Developers:
-                </div>
-                <ol className="list-decimal list-inside space-y-1.5 text-sky-900 leading-relaxed">
-                  <li>
-                    Acesse o portal:{' '}
-                    <a
-                      href="https://www.mercadopago.com.br/developers/panel/app"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline font-bold text-sky-700 hover:text-sky-900"
-                    >
-                      mercadopago.com.br/developers/panel/app ↗
-                    </a>
-                  </li>
-                  <li>Entre com a sua conta do Mercado Pago onde você recebe suas vendas;</li>
-                  <li>Clique no botão azul <strong>"Criar aplicação"</strong> (ou escolha uma se já tiver);</li>
-                  <li>Informe o nome (ex: <em>Galeria Prova Fotos</em>) e marque o tipo como <strong>"Pagamentos Online"</strong>;</li>
-                  <li>No menu da aplicação criada, vá em <strong>"Credenciais de Produção"</strong> (ou Teste);</li>
-                  <li>Copie o campo <strong>Access Token</strong> (começa com <code className="bg-sky-100 px-1 py-0.5 rounded text-[10px]">APP_USR-...</code>);</li>
-                  <li>Cole no campo acima e clique no botão verde <strong>Salvar Configurações do PIX</strong> abaixo.</li>
-                </ol>
-              </div>
-
-              {/* Botão Salvar */}
-              <button
-                type="button"
-                onClick={async () => {
-                  const cleanedToken = (contatoForm.mercado_pago_token || '').trim();
-                  try {
-                    localStorage.setItem('mercado_pago_token', cleanedToken);
-                    localStorage.setItem('mercado_pago_ativo', JSON.stringify(contatoForm.mercado_pago_ativo !== false));
-                  } catch (e) {}
-
-                  if (onSaveContato) {
-                    try {
-                      await onSaveContato({ ...contatoForm, mercado_pago_token: cleanedToken });
-                      alert("✓ Configurações do Mercado Pago salvas com sucesso!");
-                    } catch (err) {
-                      alert("Erro ao salvar configurações do Mercado Pago: " + err.message);
-                    }
-                  } else {
-                    alert("✓ Token salvo com sucesso localmente!");
-                  }
-                }}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-sans text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>💾</span> Salvar Configurações do PIX
-              </button>
-            </div>
-          </div>
-        </div>
+        <PaymentReport
+          eventos={eventos}
+          clientes={clientes}
+          selecoes={selecoes}
+          contatoForm={contatoForm}
+          setContatoForm={setContatoForm}
+          showMercadoPagoToken={showMercadoPagoToken}
+          setShowMercadoPagoToken={setShowMercadoPagoToken}
+          onSaveContato={onSaveContato}
+          onConfirmPayment={onConfirmPayment}
+        />
       )}
 
       {/* Sub-tab 5: Portfólio */}

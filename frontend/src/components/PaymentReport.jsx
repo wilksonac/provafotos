@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * PaymentReport - Relatório e Log Completo de Pagamentos (Fotos Extras)
@@ -775,8 +776,8 @@ export default function PaymentReport({
       )}
 
       {/* ======================= MODAL: DETALHES DA TRANSAÇÃO / RECIBO ======================= */}
-      {selectedTxModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs animate-fade-in">
+      {selectedTxModal && typeof document !== 'undefined' && createPortal(
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs animate-fade-in">
           <div className="bg-white border border-stone-200 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-scale-in space-y-4">
             <div className="flex items-center justify-between border-b border-stone-150 pb-3">
               <div className="flex items-center gap-2">
@@ -870,7 +871,8 @@ export default function PaymentReport({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

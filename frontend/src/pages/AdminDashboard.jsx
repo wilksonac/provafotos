@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import PaymentReport from '../components/PaymentReport';
 
 const getEventStatus = (evento) => {
@@ -166,6 +167,21 @@ export default function AdminDashboard({
   const [previewPhotoModal, setPreviewPhotoModal] = useState(null); // photo object for enlarged preview
   const [expandedEventIds, setExpandedEventIds] = useState(new Set());
   const [tempTemplate, setTempTemplate] = useState(templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
+  const [galleryClientSearch, setGalleryClientSearch] = useState({}); // { [eventId]: string }
+  const [modalClientSearch, setModalClientSearch] = useState('');
+  const [shareModalClientSearch, setShareModalClientSearch] = useState('');
+
+  // Bloquear rolagem do fundo quando qualquer modal estiver aberto
+  useEffect(() => {
+    const isAnyModalOpen = isShareModalOpen || photosModalEventId || selectedPhotosModal || previewPhotoModal || showAddCategoryModal || showGalleryCategoryModal;
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isShareModalOpen, photosModalEventId, selectedPhotosModal, previewPhotoModal, showAddCategoryModal, showGalleryCategoryModal]);
 
   useEffect(() => {
     if (templateMensagem) {
@@ -823,7 +839,7 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-3 sm:p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans animate-scale-in max-w-full overflow-hidden">
+    <div className="w-full max-w-5xl mx-auto p-3 sm:p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans max-w-full">
       
       {/* Dashboard Sub Header com Seletor de Módulos */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between border-b border-stone-150 pb-5 mb-6 gap-4">
@@ -1533,18 +1549,95 @@ export default function AdminDashboard({
                                     </span>
                                   </div>
 
-                                  {associatedClients.length === 0 ? (
-                                    <div className="p-4 bg-white border border-dashed border-stone-250 rounded-xl text-center space-y-1">
-                                      <p className="text-xs text-stone-700 font-semibold">
-                                        Nenhum cliente cadastrado nesta galeria ainda.
-                                      </p>
-                                      <p className="text-[10.5px] text-stone-400">
-                                        Compartilhe o Link Geral acima. Assim que os clientes ou convidados acessarem e fizerem o autocadastro, eles aparecerão aqui automaticamente com suas seleções individuais!
-                                      </p>
+                                  {/* Barra de Busca de Clientes na Galeria */}
+                                  {associatedClients.length > 0 && (
+                                    <div className="relative mt-2 mb-2.5">
+                                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 text-xs select-none">
+                                        🔍
+                                      </span>
+                                      <input
+                                        type="text"
+                                        placeholder={`Buscar cliente nesta galeria por nome... (${associatedClients.length})`}
+                                        value={galleryClientSearch[evento.id] || ''}
+                                        onChange={(e) =>
+                                          setGalleryClientSearch((prev) => ({
+                                            ...prev,
+                                            [evento.id]: e.target.value
+                                          }))
+                                        }
+                                        className="w-full pl-8 pr-7 py-1.5 border border-stone-200/90 rounded-lg text-xs focus:outline-none focus:border-stone-900 bg-white placeholder:text-stone-400 transition-colors shadow-2xs"
+                                      />
+                                      {galleryClientSearch[evento.id] && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setGalleryClientSearch((prev) => ({
+                                              ...prev,
+                                              [evento.id]: ''
+                                            }))
+                                          }
+                                          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-bold leading-none p-1"
+                                          title="Limpar busca"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <div className="space-y-2.5">
-                                      {associatedClients.map((c) => {
+                                  )}
+
+                                  {(() => {
+                                    const clientQuery = (galleryClientSearch[evento.id] || '').trim().toLowerCase();
+                                    const filteredAssociatedClients = clientQuery
+                                      ? associatedClients.filter((c) =>
+                                          (c.nome || '').toLowerCase().includes(clientQuery) ||
+                                          (c.email || '').toLowerCase().includes(clientQuery) ||
+                                          (c.telefone || '').includes(clientQuery)
+                                        )
+                                      : associatedClients;
+
+                                    if (associatedClients.length === 0) {
+                                      return (
+                                        <div className="p-4 bg-white border border-dashed border-stone-250 rounded-xl text-center space-y-1">
+                                          <p className="text-xs text-stone-700 font-semibold">
+                                            Nenhum cliente cadastrado nesta galeria ainda.
+                                          </p>
+                                          <p className="text-[10.5px] text-stone-400">
+                                            Compartilhe o Link Geral acima. Assim que os clientes ou convidados acessarem e fizerem o autocadastro, eles aparecerão aqui automaticamente com suas seleções individuais!
+                                          </p>
+                                        </div>
+                                      );
+                                    }
+
+                                    if (filteredAssociatedClients.length === 0) {
+                                      return (
+                                        <div className="p-4 bg-white border border-stone-200/80 rounded-xl text-center text-xs text-stone-500 space-y-1.5 shadow-2xs">
+                                          <p className="font-semibold text-stone-700">Nenhum cliente encontrado para "{galleryClientSearch[evento.id]}".</p>
+                                          <button
+                                            type="button"
+                                            onClick={() => setGalleryClientSearch((prev) => ({ ...prev, [evento.id]: '' }))}
+                                            className="text-[10px] text-stone-900 font-bold uppercase underline"
+                                          >
+                                            Limpar filtro
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div className="space-y-2.5">
+                                        {clientQuery && (
+                                          <div className="text-[9.5px] text-stone-500 font-medium px-1 flex justify-between items-center">
+                                            <span>Exibindo <strong>{filteredAssociatedClients.length}</strong> de <strong>{associatedClients.length}</strong> clientes</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setGalleryClientSearch((prev) => ({ ...prev, [evento.id]: '' }))}
+                                              className="text-[9px] text-stone-400 hover:text-stone-700 underline uppercase"
+                                            >
+                                              Ver todos
+                                            </button>
+                                          </div>
+                                        )}
+                                        {filteredAssociatedClients.map((c) => {
                                         const selectionId = `${evento.id}_${c.id}`;
                                         const activeSel = (selecoes || []).find(s => s.id === selectionId);
                                         const selectedPhotoIds = activeSel ? (activeSel.fotos_selecionadas || []) : [];
@@ -1790,9 +1883,10 @@ export default function AdminDashboard({
                                           </div>
                                         );
                                       })}
-                                    </div>
-                                  )}
-
+                                      </div>
+                                    );
+                                  })()}
+                                  
                                   {/* Componente para vincular novo cliente */}
                                   <div className="pt-1">
                                     <InlineAssociateClient
@@ -4037,7 +4131,7 @@ export default function AdminDashboard({
     )}
 
       {/* Modal para Adicionar Categoria */}
-      {showAddCategoryModal && (
+      {showAddCategoryModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-stone-950/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-sm">
           <div 
             className="bg-white border border-stone-200 rounded-xl shadow-xl max-w-sm w-full p-6 animate-scale-in relative"
@@ -4127,12 +4221,13 @@ export default function AdminDashboard({
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Share Modal */}
-      {isShareModalOpen && sharingEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
+      {isShareModalOpen && sharingEvent && typeof document !== 'undefined' && createPortal(
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
             
             {/* Header */}
@@ -4484,7 +4579,8 @@ export default function AdminDashboard({
             </div>
             
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Gerenciador de Fotos da Galeria Modal */}
@@ -4500,7 +4596,7 @@ export default function AdminDashboard({
           ? allPhotos.filter(p => modalSelectedIds.has(p.id))
           : allPhotos;
 
-        return (
+        return typeof document !== 'undefined' && createPortal(
           <div 
             className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
             onClick={() => {
@@ -4678,6 +4774,8 @@ export default function AdminDashboard({
 
             </div>
           </div>
+        ,
+          document.body
         );
       })()}
 
@@ -4705,7 +4803,7 @@ export default function AdminDashboard({
         const lrNames = selectedPhotos.map(f => (f.name || '').replace(/\.[^/.]+$/, "")).join(', ');
         const winNames = selectedPhotos.map(f => f.name || '').join(' OR ');
 
-        return (
+        return typeof document !== 'undefined' && createPortal(
           <div 
             className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
             onClick={() => setSelectedPhotosModal(null)}
@@ -4772,6 +4870,25 @@ export default function AdminDashboard({
                   <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400 flex-shrink-0">
                     Filtrar por Cliente:
                   </span>
+                  <div className="relative flex-shrink-0">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 text-[10px]">🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Buscar cliente..."
+                      value={modalClientSearch}
+                      onChange={(e) => setModalClientSearch(e.target.value)}
+                      className="pl-6 pr-5 py-0.5 text-[9.5px] border border-stone-250 rounded-md focus:outline-none focus:border-stone-900 bg-white"
+                    />
+                    {modalClientSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setModalClientSearch('')}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[9px] font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => setSelectedPhotosModal({ eventId: modalEvent.id, clientId: null })}
@@ -4781,7 +4898,7 @@ export default function AdminDashboard({
                   >
                     Todos os Clientes ({getSelectedPhotosForEvent(modalEvent, null).length})
                   </button>
-                  {clientsWithSelections.map(item => (
+                  {clientsWithSelections.filter(item => !modalClientSearch.trim() || (item.client.nome || "").toLowerCase().includes(modalClientSearch.trim().toLowerCase())).map(item => (
                     <button
                       key={item.client.id}
                       type="button"
@@ -4871,12 +4988,14 @@ export default function AdminDashboard({
               </div>
             </div>
           </div>
+        ,
+          document.body
         );
       })()}
 
       {/* Preview Ampliado em Alta Resolução (Lightbox) */}
       {/* Modal de Gerenciamento de Categorias de Galeria */}
-      {showGalleryCategoryModal && (
+      {showGalleryCategoryModal && typeof document !== 'undefined' && createPortal(
         <div 
           className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in"
           onClick={() => {
@@ -5041,11 +5160,12 @@ export default function AdminDashboard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Preview Ampliado em Alta Resolução (Lightbox) */}
-      {previewPhotoModal && (
+      {previewPhotoModal && typeof document !== 'undefined' && createPortal(
         <div 
           className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-fade-in"
           onClick={() => setPreviewPhotoModal(null)}
@@ -5072,7 +5192,8 @@ export default function AdminDashboard({
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

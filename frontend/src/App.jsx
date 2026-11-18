@@ -440,18 +440,44 @@ export default function App() {
         }
       });
 
-      // Ordenar da mais recente para a mais antiga (mais recente no topo)
-      docs.sort((a, b) => {
-        const dateA = a.data ? String(a.data).trim() : '';
-        const dateB = b.data ? String(b.data).trim() : '';
-        if (dateA && dateB && dateA !== dateB) {
-          return dateB.localeCompare(dateA);
+      // Ordenar da mais recente para a mais antiga pela data de criação
+      const getCreationTime = (evt) => {
+        if (!evt) return 0;
+        if (evt.createdAt) {
+          if (typeof evt.createdAt?.toMillis === 'function') return evt.createdAt.toMillis();
+          if (evt.createdAt?.seconds) return evt.createdAt.seconds * 1000;
+          const t = Date.parse(evt.createdAt);
+          if (!isNaN(t)) return t;
         }
-        if (dateA && !dateB) return -1;
-        if (!dateA && dateB) return 1;
-        const timeA = a.createdAt ? Date.parse(a.createdAt) : (typeof a.id === 'string' && a.id.startsWith('evt_') ? parseInt(a.id.replace('evt_', ''), 10) : 0);
-        const timeB = b.createdAt ? Date.parse(b.createdAt) : (typeof b.id === 'string' && b.id.startsWith('evt_') ? parseInt(b.id.replace('evt_', ''), 10) : 0);
-        return timeB - timeA;
+        if (evt.criado_em) {
+          if (typeof evt.criado_em?.toMillis === 'function') return evt.criado_em.toMillis();
+          if (evt.criado_em?.seconds) return evt.criado_em.seconds * 1000;
+          const t = Date.parse(evt.criado_em);
+          if (!isNaN(t)) return t;
+        }
+        if (evt.data_criacao) {
+          const t = Date.parse(evt.data_criacao);
+          if (!isNaN(t)) return t;
+        }
+        if (typeof evt.id === 'string') {
+          const match = evt.id.match(/\d{10,13}/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (!isNaN(num)) return num;
+          }
+          if (evt.id.startsWith('evt_')) {
+            const num = parseInt(evt.id.replace('evt_', ''), 10);
+            if (!isNaN(num)) return num;
+          }
+        }
+        return 0;
+      };
+
+      docs.sort((a, b) => {
+        const timeA = getCreationTime(a);
+        const timeB = getCreationTime(b);
+        if (timeA !== timeB) return timeB - timeA;
+        return (b.id || '').localeCompare(a.id || '');
       });
 
       setEventos(docs);

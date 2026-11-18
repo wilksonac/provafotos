@@ -461,7 +461,8 @@ export default function AdminDashboard({
 
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'aberta' | 'expirada' | 'concluida'
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [gallerySortBy, setGallerySortBy] = useState('data_evento'); // 'data_evento' | 'data_criacao' | 'data_antiga'
+  const [gallerySearchQuery, setGallerySearchQuery] = useState('');
+  const [gallerySortBy, setGallerySortBy] = useState('data_criacao'); // 'data_criacao' | 'data_criacao_antiga' | 'data_evento' | 'data_antiga'
   const [showGalleryCategoryModal, setShowGalleryCategoryModal] = useState(false);
   const [newGalleryCategoryInput, setNewGalleryCategoryInput] = useState('');
   const [editingGalleryCategory, setEditingGalleryCategory] = useState(null); // { original: '', current: '' }
@@ -1103,17 +1104,35 @@ export default function AdminDashboard({
             </div>
           ) : (() => {
             const getEventCreationTime = (evt) => {
+              if (!evt) return 0;
               if (evt.createdAt) {
+                if (typeof evt.createdAt?.toMillis === 'function') return evt.createdAt.toMillis();
+                if (evt.createdAt?.seconds) return evt.createdAt.seconds * 1000;
                 const t = Date.parse(evt.createdAt);
                 if (!isNaN(t)) return t;
               }
               if (evt.criado_em) {
+                if (typeof evt.criado_em?.toMillis === 'function') return evt.criado_em.toMillis();
+                if (evt.criado_em?.seconds) return evt.criado_em.seconds * 1000;
                 const t = Date.parse(evt.criado_em);
                 if (!isNaN(t)) return t;
               }
-              if (typeof evt.id === 'string' && evt.id.startsWith('evt_')) {
-                const num = parseInt(evt.id.replace('evt_', ''), 10);
-                if (!isNaN(num)) return num;
+              if (evt.data_criacao) {
+                if (typeof evt.data_criacao?.toMillis === 'function') return evt.data_criacao.toMillis();
+                if (evt.data_criacao?.seconds) return evt.data_criacao.seconds * 1000;
+                const t = Date.parse(evt.data_criacao);
+                if (!isNaN(t)) return t;
+              }
+              if (typeof evt.id === 'string') {
+                const match = evt.id.match(/\d{10,13}/);
+                if (match) {
+                  const num = parseInt(match[0], 10);
+                  if (!isNaN(num)) return num;
+                }
+                if (evt.id.startsWith('evt_')) {
+                  const num = parseInt(evt.id.replace('evt_', ''), 10);
+                  if (!isNaN(num)) return num;
+                }
               }
               return 0;
             };
@@ -1128,14 +1147,42 @@ export default function AdminDashboard({
 
                 const categoryMatch = matchesGalleryCategory(evento, categoryFilter);
 
-                return statusMatch && categoryMatch;
+                let searchMatch = true;
+                const q = (gallerySearchQuery || '').trim().toLowerCase();
+                if (q) {
+                  const titleMatch = (evento.titulo || '').toLowerCase().includes(q);
+                  const tokenMatch = (evento.token || '').toLowerCase().includes(q);
+                  const idMatch = (evento.id || '').toLowerCase().includes(q);
+                  // Verifica se algum cliente vinculado corresponde à busca
+                  const clientIds = new Set([
+                    ...(evento.clientes_permitidos || []),
+                    ...(evento.id_cliente ? [evento.id_cliente] : [])
+                  ]);
+                  const clientMatch = Array.from(clientIds).some((cid) => {
+                    const c = (clientes || []).find((cli) => cli.id === cid);
+                    return c && (
+                      (c.nome || '').toLowerCase().includes(q) ||
+                      (c.email || '').toLowerCase().includes(q)
+                    );
+                  });
+                  searchMatch = titleMatch || tokenMatch || idMatch || clientMatch;
+                }
+
+                return statusMatch && categoryMatch && searchMatch;
               })
               .sort((a, b) => {
                 if (gallerySortBy === 'data_criacao') {
                   const timeA = getEventCreationTime(a);
                   const timeB = getEventCreationTime(b);
                   if (timeA !== timeB) return timeB - timeA;
-                  return (b.data || '').localeCompare(a.data || '');
+                  return (b.id || '').localeCompare(a.id || '');
+                }
+
+                if (gallerySortBy === 'data_criacao_antiga') {
+                  const timeA = getEventCreationTime(a);
+                  const timeB = getEventCreationTime(b);
+                  if (timeA !== timeB) return timeA - timeB;
+                  return (a.id || '').localeCompare(b.id || '');
                 }
 
                 if (gallerySortBy === 'data_antiga') {
@@ -1147,7 +1194,7 @@ export default function AdminDashboard({
                   return getEventCreationTime(a) - getEventCreationTime(b);
                 }
 
-                // Padrão: 'data_evento' (Mais recente no topo)
+                // Padrão alternativo: 'data_evento' (data de expiração / evento)
                 const dateA = a.data ? String(a.data).trim() : '';
                 const dateB = b.data ? String(b.data).trim() : '';
                 if (dateA && dateB && dateA !== dateB) {
@@ -1164,6 +1211,45 @@ export default function AdminDashboard({
 
             return (
               <div className="space-y-4">
+                {/* Barra de Busca de Galerias por Nome */}
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm select-none">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    placeholder={`Buscar galeria por nome, título ou cliente... (${eventos.length} galerias cadastradas)`}
+                    value={gallerySearchQuery}
+                    onChange={(e) => setGallerySearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2.5 border border-stone-200/90 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-stone-900 bg-white placeholder:text-stone-400 transition-all shadow-2xs"
+                  />
+                  {gallerySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setGallerySearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-bold leading-none p-1 rounded-full hover:bg-stone-100 transition-colors"
+                      title="Limpar busca"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {gallerySearchQuery.trim() && (
+                  <div className="text-[10px] text-stone-500 font-medium px-1 flex items-center justify-between -mt-1">
+                    <span>
+                      Exibindo <strong>{filteredEventos.length}</strong> de <strong>{eventos.length}</strong> galerias para "<strong>{gallerySearchQuery}</strong>"
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setGallerySearchQuery('')}
+                      className="text-stone-400 hover:text-stone-700 underline uppercase text-[9px] font-bold"
+                    >
+                      Limpar busca
+                    </button>
+                  </div>
+                )}
+
                 {/* Filtros de Categoria Dinâmica */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-stone-50/70 border border-stone-200/80 rounded-xl">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1258,9 +1344,10 @@ export default function AdminDashboard({
                         className="bg-transparent text-[9px] font-bold uppercase tracking-wider text-stone-800 focus:outline-none cursor-pointer"
                         title="Critério de ordenação das galerias"
                       >
-                        <option value="data_evento">📅 Mais Recente Primeiro</option>
-                        <option value="data_criacao">🕒 Recém-Criadas</option>
-                        <option value="data_antiga">📅 Mais Antiga Primeiro</option>
+                        <option value="data_criacao">🕒 Mais Recentes (Criação)</option>
+                        <option value="data_criacao_antiga">🕒 Mais Antigas (Criação)</option>
+                        <option value="data_evento">📅 Mais Recente (Expiração / Data)</option>
+                        <option value="data_antiga">📅 Mais Antiga (Expiração / Data)</option>
                       </select>
                     </div>
 
@@ -1307,7 +1394,20 @@ export default function AdminDashboard({
 
                 {filteredEventos.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-stone-200 rounded-xl bg-stone-50/20 text-stone-400 font-serif-editorial">
-                    <p className="text-sm">Nenhuma galeria encontrada para este filtro.</p>
+                    <p className="text-sm">
+                      {gallerySearchQuery.trim()
+                        ? `Nenhuma galeria encontrada para "${gallerySearchQuery}".`
+                        : 'Nenhuma galeria encontrada para este filtro.'}
+                    </p>
+                    {gallerySearchQuery.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setGallerySearchQuery('')}
+                        className="mt-2 text-xs text-stone-900 font-sans font-bold uppercase underline cursor-pointer"
+                      >
+                        Limpar busca
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2.5">
@@ -1406,13 +1506,25 @@ export default function AdminDashboard({
                                   </span>
                                 </div>
 
-                                <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-400 font-sans flex-wrap">
-                                  <span>📅 {evento.data || 'Sem data'}</span>
-                                  <span>&bull;</span>
-                                  <span>📷 {photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
-                                  <span>&bull;</span>
-                                  <span>👥 {associatedClients.length} {associatedClients.length === 1 ? 'cliente' : 'clientes'}</span>
-                                </div>
+                                {(() => {
+                                  const cTime = getEventCreationTime(evento);
+                                  const cDateStr = cTime ? new Date(cTime).toLocaleDateString('pt-BR') : null;
+                                  return (
+                                    <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-400 font-sans flex-wrap">
+                                      {cDateStr && (
+                                        <>
+                                          <span title="Data em que a galeria foi criada">🕒 Criada em: <strong className="text-stone-600 font-semibold">{cDateStr}</strong></span>
+                                          <span>&bull;</span>
+                                        </>
+                                      )}
+                                      <span title="Data de expiração da galeria">📅 Prazo: {evento.data || 'Sem data'}</span>
+                                      <span>&bull;</span>
+                                      <span>📷 {photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+                                      <span>&bull;</span>
+                                      <span>👥 {associatedClients.length} {associatedClients.length === 1 ? 'cliente' : 'clientes'}</span>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
 

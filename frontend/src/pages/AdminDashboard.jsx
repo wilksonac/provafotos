@@ -171,18 +171,6 @@ export default function AdminDashboard({
   const [modalClientSearch, setModalClientSearch] = useState('');
   const [shareModalClientSearch, setShareModalClientSearch] = useState('');
 
-  // Bloquear rolagem do fundo quando qualquer modal estiver aberto
-  useEffect(() => {
-    const isAnyModalOpen = isShareModalOpen || photosModalEventId || selectedPhotosModal || previewPhotoModal || showAddCategoryModal || showGalleryCategoryModal;
-    if (isAnyModalOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isShareModalOpen, photosModalEventId, selectedPhotosModal, previewPhotoModal, showAddCategoryModal, showGalleryCategoryModal]);
-
   useEffect(() => {
     if (templateMensagem) {
       setTempTemplate(templateMensagem);
@@ -837,6 +825,18 @@ export default function AdminDashboard({
       customMessage: getCompiledMessage(sharingEvent, sharingClient, shareForm, tempTemplate || null)
     });
   };
+
+  // Bloquear rolagem do fundo quando qualquer modal estiver aberto
+  useEffect(() => {
+    const isAnyModalOpen = isShareModalOpen || photosModalEventId || selectedPhotosModal || previewPhotoModal || showAddCategoryModal || showGalleryCategoryModal;
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isShareModalOpen, photosModalEventId, selectedPhotosModal, previewPhotoModal, showAddCategoryModal, showGalleryCategoryModal]);
 
   return (
     <div className="w-full max-w-5xl mx-auto p-3 sm:p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans max-w-full">

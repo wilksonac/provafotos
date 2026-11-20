@@ -238,7 +238,7 @@ export default function App() {
     });
 
     const unsubscribeTemplate = onSnapshot(doc(db, "configuracoes", "template_mensagem"), (docSnap) => {
-      if (docSnap.exists() && docSnap.data().texto) {
+      if (docSnap.exists() && typeof docSnap.data().texto === 'string' && docSnap.data().texto.trim()) {
         setTemplateMensagem(docSnap.data().texto);
       }
     }, (error) => {

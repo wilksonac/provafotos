@@ -750,7 +750,10 @@ export default function AdminDashboard({
     const dateFormatted = formatEventDate(form.prazo || event.data);
     const senhaText = event.acesso_restrito ? (client?.senha || 'Definida no autocadastro') : '(Acesso direto por link)';
     
-    let template = customTemplate !== null ? customTemplate : (templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
+    const isValidTpl = (t) => typeof t === 'string' && t.trim().length > 0;
+    let template = isValidTpl(customTemplate)
+      ? customTemplate
+      : (isValidTpl(templateMensagem) ? templateMensagem : DEFAULT_SYSTEM_TEMPLATE);
 
     let obsText = form.observacoes?.trim() ? `${form.observacoes.trim()}\n\n` : '';
 
@@ -789,7 +792,7 @@ export default function AdminDashboard({
     setSharingEvent(evento);
     setSharingClient(selectedClient);
     setIsCustomMessageEdited(false);
-    setTempTemplate(templateMensagem || DEFAULT_SYSTEM_TEMPLATE);
+    setTempTemplate((typeof templateMensagem === 'string' && templateMensagem.trim()) ? templateMensagem : DEFAULT_SYSTEM_TEMPLATE);
     
     const initialForm = {
       observacoes: '',

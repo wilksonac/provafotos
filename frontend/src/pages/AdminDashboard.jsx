@@ -463,7 +463,13 @@ export default function AdminDashboard({
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [gallerySearchQuery, setGallerySearchQuery] = useState('');
   const [gallerySortBy, setGallerySortBy] = useState('data_criacao'); // 'data_criacao' | 'data_criacao_antiga' | 'data_evento' | 'data_antiga'
+  const [galleryCurrentPage, setGalleryCurrentPage] = useState(1);
+  const GALLERIES_PER_PAGE = 10;
   const [showGalleryCategoryModal, setShowGalleryCategoryModal] = useState(false);
+
+  useEffect(() => {
+    setGalleryCurrentPage(1);
+  }, [statusFilter, categoryFilter, gallerySearchQuery, gallerySortBy]);
   const [newGalleryCategoryInput, setNewGalleryCategoryInput] = useState('');
   const [editingGalleryCategory, setEditingGalleryCategory] = useState(null); // { original: '', current: '' }
 
@@ -1212,6 +1218,36 @@ export default function AdminDashboard({
               ? eventos
               : eventos.filter(e => matchesGalleryCategory(e, categoryFilter));
 
+            const totalGalleryPages = Math.max(1, Math.ceil(filteredEventos.length / GALLERIES_PER_PAGE));
+            const safeGalleryPage = Math.min(galleryCurrentPage, totalGalleryPages);
+            const pageStartIndex = (safeGalleryPage - 1) * GALLERIES_PER_PAGE;
+            const paginatedEventos = filteredEventos.slice(pageStartIndex, pageStartIndex + GALLERIES_PER_PAGE);
+
+            const getVisiblePageNumbers = () => {
+              if (totalGalleryPages <= 7) {
+                return Array.from({ length: totalGalleryPages }, (_, i) => i + 1);
+              }
+              const pages = [1];
+              const start = Math.max(2, safeGalleryPage - 1);
+              const end = Math.min(totalGalleryPages - 1, safeGalleryPage + 1);
+              if (start > 2) pages.push('ellipsis-start');
+              for (let p = start; p <= end; p++) pages.push(p);
+              if (end < totalGalleryPages - 1) pages.push('ellipsis-end');
+              pages.push(totalGalleryPages);
+              return pages;
+            };
+
+            const handleGoToGalleryPage = (page) => {
+              const clamped = Math.max(1, Math.min(totalGalleryPages, page));
+              setGalleryCurrentPage(clamped);
+              if (typeof window !== 'undefined') {
+                const listEl = document.getElementById('admin-galleries-list-top');
+                if (listEl) {
+                  listEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }
+            };
+
             return (
               <div className="space-y-4">
                 {/* Barra de Busca de Galerias por Nome */}
@@ -1320,7 +1356,7 @@ export default function AdminDashboard({
                       <div className="hidden sm:flex items-center gap-2 border-l border-stone-200/80 pl-3">
                         <button
                           type="button"
-                          onClick={() => expandAllEvents(filteredEventos)}
+                          onClick={() => expandAllEvents(paginatedEventos)}
                           className="text-[9px] font-bold text-stone-500 hover:text-stone-900 uppercase tracking-wider hover:underline"
                         >
                           Expandir Todas
@@ -1413,8 +1449,8 @@ export default function AdminDashboard({
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
-                    {filteredEventos.map((evento) => {
+                  <div id="admin-galleries-list-top" className="space-y-2.5">
+                    {paginatedEventos.map((evento) => {
                       const computedStatus = getEventStatus(evento);
                       const isExpanded = expandedEventIds.has(evento.id);
                       
@@ -2195,6 +2231,65 @@ export default function AdminDashboard({
                         </div>
                       );
                     })}
+
+                    {/* Paginação das Galerias */}
+                    {totalGalleryPages > 1 && (
+                      <div className="pt-4 mt-2 border-t border-stone-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span className="text-[10.5px] text-stone-500 font-medium">
+                          Mostrando <strong>{pageStartIndex + 1}</strong>–<strong>{Math.min(pageStartIndex + GALLERIES_PER_PAGE, filteredEventos.length)}</strong> de <strong>{filteredEventos.length}</strong> galerias
+                        </span>
+
+                        <div className="flex items-center gap-1 flex-wrap justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleGoToGalleryPage(safeGalleryPage - 1)}
+                            disabled={safeGalleryPage === 1}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                              safeGalleryPage === 1
+                                ? 'border-stone-150 text-stone-300 bg-stone-50 cursor-not-allowed'
+                                : 'border-stone-200 text-stone-700 bg-white hover:bg-stone-100 cursor-pointer'
+                            }`}
+                          >
+                            ← Anterior
+                          </button>
+
+                          {getVisiblePageNumbers().map((item, idx) =>
+                            typeof item === 'string' ? (
+                              <span key={`${item}-${idx}`} className="px-1.5 text-xs text-stone-400 select-none">
+                                …
+                              </span>
+                            ) : (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => handleGoToGalleryPage(item)}
+                                aria-current={item === safeGalleryPage ? 'page' : undefined}
+                                className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                  item === safeGalleryPage
+                                    ? 'bg-stone-900 text-white shadow-sm'
+                                    : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+                                }`}
+                              >
+                                {item}
+                              </button>
+                            )
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleGoToGalleryPage(safeGalleryPage + 1)}
+                            disabled={safeGalleryPage === totalGalleryPages}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                              safeGalleryPage === totalGalleryPages
+                                ? 'border-stone-150 text-stone-300 bg-stone-50 cursor-not-allowed'
+                                : 'border-stone-200 text-stone-700 bg-white hover:bg-stone-100 cursor-pointer'
+                            }`}
+                          >
+                            Próxima →
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

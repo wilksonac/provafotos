@@ -4343,7 +4343,7 @@ export default function AdminDashboard({
       {/* Share Modal */}
       {isShareModalOpen && sharingEvent && typeof document !== 'undefined' && createPortal(
 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
+          <div className="bg-white text-stone-900 border border-stone-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
             
             {/* Header */}
             <div className="px-6 py-4 border-b border-stone-150 flex items-center justify-between bg-stone-50">
@@ -4612,7 +4612,8 @@ export default function AdminDashboard({
                 
                 <div className="flex-grow flex flex-col">
                   <textarea
-                    className="w-full flex-grow p-4 border border-stone-200 rounded-lg text-xs font-mono bg-stone-50/50 focus:outline-none focus:border-stone-900 resize-none min-h-[300px]"
+                    className="w-full flex-grow p-4 border border-stone-200 rounded-lg text-xs font-mono bg-stone-50/50 text-stone-900 focus:outline-none focus:border-stone-900 resize-none min-h-[300px]"
+                    style={{ color: '#1c1917' }}
                     value={shareForm.customMessage}
                     onChange={handleCustomMessageChange}
                     placeholder="A mensagem aparecerá aqui..."

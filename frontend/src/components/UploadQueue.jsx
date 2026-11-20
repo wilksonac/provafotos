@@ -12,11 +12,33 @@ const formatBytes = (bytes, decimals = 2) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-export default function UploadQueue({ eventId = 'mock_event_123', categories = [], onUploadSuccess, onFinished }) {
+const normalizePhotoName = (name = '') => String(name).trim().toLowerCase();
+
+const computeFileHash = async (file) => {
+  try {
+    if (!file || typeof crypto === 'undefined' || !crypto.subtle) return null;
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch (err) {
+    console.warn('[UPLOAD] Não foi possível calcular hash do arquivo:', file?.name, err);
+    return null;
+  }
+};
+
+export default function UploadQueue({
+  eventId = 'mock_event_123',
+  categories = [],
+  existingPhotos = [],
+  onUploadSuccess,
+  onFinished
+}) {
   const [queue, setQueue] = useState([]);
   const [concurrencyLimit, setConcurrencyLimit] = useState(5);
   const [useMock, setUseMock] = useState(!storage); 
   const [isDragging, setIsDragging] = useState(false);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
 
   const [batchCategory, setBatchCategory] = useState(categories[0] || '');
   const [batchDestaque, setBatchDestaque] = useState(false);
@@ -28,6 +50,11 @@ export default function UploadQueue({ eventId = 'mock_event_123', categories = [
   }, [categories]);
 
   const uploadTasksRef = useRef({});
+  const queueRef = useRef([]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   const updateFileState = useCallback((id, updates) => {
     setQueue((prevQueue) =>
@@ -98,6 +125,9 @@ export default function UploadQueue({ eventId = 'mock_event_123', categories = [
             name: item.name,
             url: finalUrl,
             size: item.totalBytes,
+            originalSize: item.size,
+            hash: item.hash || null,
+            forceDuplicate: !!item.forceDuplicate,
             cena: item.categoria || '',
             destaque: !!item.destaque
           });
@@ -229,6 +259,9 @@ const compressImage = (file) => {
                 name: item.name,
                 url: downloadURL,
                 size: fileToUpload.size,
+                originalSize: item.size,
+                hash: item.hash || null,
+                forceDuplicate: !!item.forceDuplicate,
                 cena: item.categoria || '',
                 destaque: !!item.destaque
               });
@@ -267,22 +300,75 @@ const compressImage = (file) => {
     }
   }, [queue, concurrencyLimit, startUpload]);
 
-  const addFilesToQueue = (fileList) => {
-    const newItems = Array.from(fileList).map((file) => ({
-      id: `${file.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: file.name,
-      size: file.size,
-      file: file,
-      progress: 0,
-      bytesTransferred: 0,
-      totalBytes: file.size,
-      status: 'idle',
-      error: null,
-      categoria: batchCategory,
-      destaque: batchDestaque
-    }));
+  const addFilesToQueue = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
 
-    setQueue((prev) => [...prev, ...newItems]);
+    setIsCheckingDuplicates(true);
+    try {
+      const existingNames = new Set(
+        (existingPhotos || []).map((p) => normalizePhotoName(p?.name)).filter(Boolean)
+      );
+      const existingHashes = new Set(
+        (existingPhotos || []).map((p) => p?.hash).filter(Boolean)
+      );
+
+      const currentActiveQueue = (queueRef.current || []).filter(
+        (item) => item.status !== 'failed' && item.status !== 'duplicate'
+      );
+      const queuedNames = new Set(
+        currentActiveQueue.map((item) => normalizePhotoName(item.name)).filter(Boolean)
+      );
+      const queuedHashes = new Set(
+        currentActiveQueue.map((item) => item.hash).filter(Boolean)
+      );
+
+      const batchNames = new Set();
+      const batchHashes = new Set();
+      const newItems = [];
+
+      for (const file of files) {
+        const normalizedName = normalizePhotoName(file.name);
+        const fileHash = await computeFileHash(file);
+
+        let duplicateReason = null;
+        if (fileHash && existingHashes.has(fileHash)) {
+          duplicateReason = 'Arquivo idêntico já existe na galeria';
+        } else if (normalizedName && existingNames.has(normalizedName)) {
+          duplicateReason = 'Já existe na galeria (mesmo nome)';
+        } else if (fileHash && (queuedHashes.has(fileHash) || batchHashes.has(fileHash))) {
+          duplicateReason = 'Arquivo idêntico já está na fila';
+        } else if (normalizedName && (queuedNames.has(normalizedName) || batchNames.has(normalizedName))) {
+          duplicateReason = 'Já está na fila de upload';
+        }
+
+        if (!duplicateReason) {
+          if (normalizedName) batchNames.add(normalizedName);
+          if (fileHash) batchHashes.add(fileHash);
+        }
+
+        newItems.push({
+          id: `${file.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          size: file.size,
+          file: file,
+          hash: fileHash,
+          progress: 0,
+          bytesTransferred: 0,
+          totalBytes: file.size,
+          status: duplicateReason ? 'duplicate' : 'idle',
+          duplicateReason,
+          forceDuplicate: false,
+          error: null,
+          categoria: batchCategory,
+          destaque: batchDestaque
+        });
+      }
+
+      setQueue((prev) => [...prev, ...newItems]);
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
   };
 
   const handleDragOver = (e) => {
@@ -306,6 +392,7 @@ const compressImage = (file) => {
     if (e.target.files && e.target.files.length > 0) {
       addFilesToQueue(e.target.files);
     }
+    e.target.value = '';
   };
 
   const cancelUpload = (id) => {
@@ -316,19 +403,37 @@ const compressImage = (file) => {
     setQueue((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const forceUploadDuplicate = (id) => {
+    updateFileState(id, {
+      status: 'idle',
+      duplicateReason: null,
+      forceDuplicate: true
+    });
+  };
+
+  const clearDuplicates = () => {
+    setQueue((prev) => prev.filter((item) => item.status !== 'duplicate'));
+  };
+
   const clearCompleted = () => {
     setQueue((prev) => prev.filter((item) => item.status !== 'completed'));
   };
 
-  const totalFiles = queue.length;
-  const completedFiles = queue.filter((item) => item.status === 'completed').length;
-  const failedFiles = queue.filter((item) => item.status === 'failed').length;
+  const duplicateFiles = queue.filter((item) => item.status === 'duplicate').length;
+  const uploadableItems = queue.filter((item) => item.status !== 'duplicate');
+  const totalFiles = uploadableItems.length;
+  const completedFiles = uploadableItems.filter((item) => item.status === 'completed').length;
+  const failedFiles = uploadableItems.filter((item) => item.status === 'failed').length;
 
-  const totalBytes = queue.reduce((acc, item) => acc + item.totalBytes, 0);
-  const totalTransferred = queue.reduce((acc, item) => acc + item.bytesTransferred, 0);
+  const totalBytes = uploadableItems.reduce((acc, item) => acc + item.totalBytes, 0);
+  const totalTransferred = uploadableItems.reduce((acc, item) => acc + item.bytesTransferred, 0);
   const globalProgress = totalBytes > 0 ? Math.round((totalTransferred / totalBytes) * 100) : 0;
 
-  const isUploadFinished = queue.length > 0 && queue.every((item) => item.status === 'completed' || item.status === 'failed');
+  const isUploadFinished =
+    queue.length > 0 &&
+    !isCheckingDuplicates &&
+    queue.every((item) => item.status === 'completed' || item.status === 'failed' || item.status === 'duplicate');
+  const onlyDuplicates = isUploadFinished && totalFiles === 0 && duplicateFiles > 0;
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 bg-white border border-stone-200 rounded-xl shadow-lg text-stone-900 font-sans animate-scale-in">
@@ -391,38 +496,77 @@ const compressImage = (file) => {
 
       {/* Conditionally Render Success Message or Drag & Drop Area */}
       {isUploadFinished ? (
-        <div className="mb-5 p-5 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-4 animate-scale-in">
-          <div className="w-12 h-12 rounded-full bg-emerald-100 border border-emerald-250 flex items-center justify-center mx-auto text-emerald-800">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="font-serif-editorial text-lg text-emerald-900 font-medium">Lote de Upload Concluído!</h3>
-            <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
-              Todas as fotos foram carregadas, otimizadas e integradas com sucesso à galeria de seleção.
-            </p>
-          </div>
-          <div className="pt-2 flex justify-center gap-3">
-            <button
-              onClick={() => {
-                setQueue([]);
-                setBatchDestaque(false);
-              }}
-              className="px-4 py-2 border border-emerald-200 text-emerald-800 rounded text-xs font-bold uppercase tracking-widest hover:bg-emerald-100/50 transition-colors"
-            >
-              Subir Mais Fotos
-            </button>
-            {onFinished && (
+        onlyDuplicates ? (
+          <div className="mb-5 p-5 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-4 animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-amber-100 border border-amber-250 flex items-center justify-center mx-auto text-amber-800">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-serif-editorial text-lg text-amber-900 font-medium">
+                {duplicateFiles === 1 ? 'Foto duplicada ignorada' : `${duplicateFiles} fotos duplicadas ignoradas`}
+              </h3>
+              <p className="text-xs text-amber-800/80 mt-1 max-w-md mx-auto leading-relaxed">
+                Todas as fotos selecionadas já existem nesta galeria e foram ignoradas automaticamente. Caso queira enviar alguma mesmo assim, clique em <strong>Enviar mesmo assim</strong> na lista abaixo.
+              </p>
+            </div>
+            <div className="pt-2 flex justify-center gap-3">
               <button
-                onClick={onFinished}
-                className="px-5 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
+                onClick={() => {
+                  setQueue([]);
+                  setBatchDestaque(false);
+                }}
+                className="px-4 py-2 border border-amber-300 text-amber-900 rounded text-xs font-bold uppercase tracking-widest hover:bg-amber-100/60 transition-colors"
               >
-                Finalizar Processo
+                Selecionar Outras Fotos
               </button>
-            )}
+              {onFinished && (
+                <button
+                  onClick={onFinished}
+                  className="px-5 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
+                >
+                  Finalizar Processo
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-5 p-5 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-4 animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 border border-emerald-250 flex items-center justify-center mx-auto text-emerald-800">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-serif-editorial text-lg text-emerald-900 font-medium">Lote de Upload Concluído!</h3>
+              <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
+                {duplicateFiles > 0
+                  ? `${completedFiles} foto(s) nova(s) enviada(s) com sucesso. ${duplicateFiles} duplicada(s) já existente(s) foram ignoradas automaticamente.`
+                  : 'Todas as fotos foram carregadas, otimizadas e integradas com sucesso à galeria de seleção.'}
+              </p>
+            </div>
+            <div className="pt-2 flex justify-center gap-3">
+              <button
+                onClick={() => {
+                  setQueue([]);
+                  setBatchDestaque(false);
+                }}
+                className="px-4 py-2 border border-emerald-200 text-emerald-800 rounded text-xs font-bold uppercase tracking-widest hover:bg-emerald-100/50 transition-colors"
+              >
+                Subir Mais Fotos
+              </button>
+              {onFinished && (
+                <button
+                  onClick={onFinished}
+                  className="px-5 py-2 bg-stone-900 hover:bg-stone-850 text-white rounded text-xs font-bold uppercase tracking-widest transition-all shadow"
+                >
+                  Finalizar Processo
+                </button>
+              )}
+            </div>
+          </div>
+        )
       ) : (
         <div
           onDragOver={handleDragOver}
@@ -449,30 +593,59 @@ const compressImage = (file) => {
           </div>
           
           <p className="text-xs font-bold text-stone-800 tracking-wider text-center">
-            Arraste e solte fotos ou <span className="text-stone-600 underline">procure em seu dispositivo</span>
+            {isCheckingDuplicates
+              ? 'Verificando fotos duplicadas...'
+              : (
+                <>
+                  Arraste e solte fotos ou <span className="text-stone-600 underline">procure em seu dispositivo</span>
+                </>
+              )}
           </p>
-          <p className="text-[10px] text-stone-400 mt-1 font-medium">Recomendado: Imagens otimizadas (960px, ~200kb)</p>
+          <p className="text-[10px] text-stone-400 mt-1 font-medium">
+            Fotos já existentes nesta galeria são detectadas e ignoradas automaticamente
+          </p>
+        </div>
+      )}
+
+      {/* Aviso de Duplicadas Detectadas */}
+      {duplicateFiles > 0 && !onlyDuplicates && (
+        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-amber-900 font-medium">
+            ⚠️ <strong>{duplicateFiles}</strong> {duplicateFiles === 1 ? 'foto duplicada foi ignorada' : 'fotos duplicadas foram ignoradas'} por já {duplicateFiles === 1 ? 'existir' : 'existirem'} na galeria ou na fila.
+          </span>
+          <button
+            type="button"
+            onClick={clearDuplicates}
+            className="text-[10px] font-bold uppercase tracking-wider text-amber-800 hover:text-amber-950 underline"
+          >
+            Ocultar duplicadas
+          </button>
         </div>
       )}
 
       {/* Global Progress Dashboard */}
       {queue.length > 0 && (
         <div className="mt-5 p-3.5 bg-stone-50/50 border border-stone-200 rounded-lg animate-scale-in">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Progresso Geral</span>
               <span className="text-xs font-bold text-stone-900 ml-2">
-                ({completedFiles} de {totalFiles} enviados)
+                ({completedFiles} de {totalFiles} {totalFiles === 1 ? 'enviado' : 'enviados'})
               </span>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {duplicateFiles > 0 && (
+                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                  {duplicateFiles} {duplicateFiles === 1 ? 'duplicada ignorada' : 'duplicadas ignoradas'}
+                </span>
+              )}
               {failedFiles > 0 && (
                 <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
                   {failedFiles} falhas
                 </span>
               )}
-              {completedFiles === totalFiles && (
+              {totalFiles > 0 && completedFiles === totalFiles && (
                 <button
                   onClick={clearCompleted}
                   className="text-[10px] font-bold text-stone-900 hover:underline"
@@ -503,11 +676,16 @@ const compressImage = (file) => {
               const isDone = item.status === 'completed';
               const isFailed = item.status === 'failed';
               const isIdle = item.status === 'idle';
+              const isDuplicate = item.status === 'duplicate';
 
               return (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3.5 p-2.5 bg-stone-50/30 border border-stone-200/40 hover:bg-stone-50/70 rounded-lg transition-all duration-200 animate-scale-in"
+                  className={`flex items-center gap-3.5 p-2.5 rounded-lg transition-all duration-200 animate-scale-in ${
+                    isDuplicate
+                      ? 'bg-amber-50/70 border border-amber-200/80'
+                      : 'bg-stone-50/30 border border-stone-200/40 hover:bg-stone-50/70'
+                  }`}
                 >
                   {/* Photo Preview */}
                   <div className="w-10 h-10 rounded bg-stone-100 border border-stone-200/60 flex items-center justify-center flex-shrink-0 text-stone-400 overflow-hidden relative">
@@ -538,6 +716,18 @@ const compressImage = (file) => {
                     {isFailed && item.error && (
                       <div className="text-[9px] text-red-500 font-medium mb-1 line-clamp-2">
                         Erro: {item.error}
+                      </div>
+                    )}
+                    {isDuplicate && (
+                      <div className="text-[9.5px] text-amber-800 font-medium mb-1 flex items-center gap-2 flex-wrap">
+                        <span>⚠️ {item.duplicateReason || 'Foto já existe na galeria'}</span>
+                        <button
+                          type="button"
+                          onClick={() => forceUploadDuplicate(item.id)}
+                          className="text-[9px] font-bold uppercase tracking-wider text-amber-900 underline hover:text-stone-900"
+                        >
+                          Enviar mesmo assim
+                        </button>
                       </div>
                     )}
 
@@ -586,27 +776,34 @@ const compressImage = (file) => {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                      <div className="flex-grow bg-stone-100 rounded-full h-1 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            isDone
-                              ? 'bg-stone-900'
-                              : isFailed
-                              ? 'bg-red-500'
-                              : 'bg-stone-600'
-                          }`}
-                          style={{ width: `${item.progress}%` }}
-                        ></div>
+                    {!isDuplicate && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-grow bg-stone-100 rounded-full h-1 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isDone
+                                ? 'bg-stone-900'
+                                : isFailed
+                                ? 'bg-red-500'
+                                : 'bg-stone-600'
+                            }`}
+                            style={{ width: `${item.progress}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-[9px] font-bold text-stone-400 min-w-[20px] text-right">
+                          {item.progress}%
+                        </span>
                       </div>
-                      <span className="text-[9px] font-bold text-stone-400 min-w-[20px] text-right">
-                        {item.progress}%
-                      </span>
-                    </div>
+                    )}
                   </div>
 
                   {/* Actions & Badges */}
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {isDuplicate && (
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-amber-800 px-1.5 py-0.5 bg-amber-100 border border-amber-200 rounded">
+                        Duplicada
+                      </span>
+                    )}
                     {isIdle && (
                       <span className="text-[8px] font-bold uppercase tracking-wider text-stone-400 px-1.5 py-0.5 bg-stone-100 rounded">
                         Fila

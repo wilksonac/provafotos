@@ -431,6 +431,9 @@ export default function App() {
               id: p.id || p.url_storage || `photo_${idx}`,
               url_storage: p.url_storage || p.url || '',
               name: p.name || `Foto ${idx + 1}`,
+              size: p.size || 150 * 1024,
+              ...(p.originalSize ? { originalSize: p.originalSize } : {}),
+              ...(p.hash ? { hash: p.hash } : {}),
               selecionada: !!p.selecionada,
               destaque: !!p.destaque,
               cena: p.cena || ''
@@ -742,11 +745,26 @@ export default function App() {
     const targetEvent = eventos.find(e => e.id === activeEventId);
     if (!targetEvent) return;
 
+    if (!uploadedFileData.forceDuplicate) {
+      const normalizedNewName = (uploadedFileData.name || '').trim().toLowerCase();
+      const isAlreadyInGallery = (targetEvent.fotos || []).some((p) => {
+        if (uploadedFileData.hash && p.hash && p.hash === uploadedFileData.hash) return true;
+        if (normalizedNewName && (p.name || '').trim().toLowerCase() === normalizedNewName) return true;
+        return false;
+      });
+      if (isAlreadyInGallery) {
+        console.warn(`[UPLOAD] Foto duplicada ignorada ao salvar na galeria: ${uploadedFileData.name}`);
+        return;
+      }
+    }
+
     const newPhoto = {
       id: uploadedFileData.id,
       name: uploadedFileData.name,
       url_storage: uploadedFileData.url,
       size: uploadedFileData.size || 150 * 1024, // 150KB default fallback
+      ...(uploadedFileData.originalSize ? { originalSize: uploadedFileData.originalSize } : {}),
+      ...(uploadedFileData.hash ? { hash: uploadedFileData.hash } : {}),
       selecionada: false,
       cena: uploadedFileData.cena || '',
       destaque: !!uploadedFileData.destaque
@@ -2937,6 +2955,7 @@ export default function App() {
             <UploadQueue
               eventId={activeEvent.id}
               categories={activeEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']}
+              existingPhotos={activeEvent.fotos || []}
               onUploadSuccess={handleUploadSuccess}
               onFinished={() => setActiveTab('admin')}
             />

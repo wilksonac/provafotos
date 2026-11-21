@@ -197,6 +197,7 @@ export default function PhotoVirtualGrid({
   onToggleSelection,
   onFinalizeEvent,
   onPaymentSuccess,
+  onDownloadPhotos,
   clienteObj = null,
   eventoObj = null,
   mercadoPagoToken = '',
@@ -385,6 +386,10 @@ export default function PhotoVirtualGrid({
     setIsDownloading(true);
     setDownloadProgress(0);
 
+    if (onDownloadPhotos) {
+      onDownloadPhotos(selected.length);
+    }
+
     const safeTitle = String(tituloEvent || 'galeria').replace(/[^\w\-]+/g, '_');
     const extOf = (url, blobType) => {
       const m = String(url).split('?')[0].match(/\.(jpe?g|png|webp|gif)$/i);
@@ -437,7 +442,7 @@ export default function PhotoVirtualGrid({
     } finally {
       setTimeout(() => setIsDownloading(false), 600);
     }
-  }, [photos, tituloEvent]);
+  }, [photos, tituloEvent, onDownloadPhotos]);
 
   // Mapeamento dinâmico de imagem de capa premium baseado no tipo de galeria
   const coverImage = useMemo(() => {

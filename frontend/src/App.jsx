@@ -3,8 +3,9 @@ import AdminDashboard from './pages/AdminDashboard';
 import UploadQueue from './components/UploadQueue';
 import PhotoVirtualGrid from './components/PhotoVirtualGrid';
 import { sendClientCredentialsEmail, sendSelectionFinalizedEmails } from './lib/brevo';
+import { logActivity, deleteActivityLog, ACTIVITY_TYPES } from './lib/activityLog';
 import { db, auth, storage } from './lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion, deleteField, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, arrayUnion, deleteField, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -66,8 +67,39 @@ export default function App() {
   const [blogPosts, setBlogPosts] = useState([]);
   const [categoriasFornecedores, setCategoriasFornecedores] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [magicEvent, setMagicEvent] = useState(null);
   const [magicClient, setMagicClient] = useState(null);
+
+  // Helper centralizado para registrar eventos no histórico de atividades
+  const recordActivity = (payload) => {
+    logActivity(db, payload).then((entry) => {
+      if (!db && entry) {
+        setActivityLogs((prev) => [entry, ...prev].slice(0, 300));
+      }
+    });
+  };
+
+  const handleDeleteActivityLog = async (logId) => {
+    if (!logId) return;
+    if (db) {
+      await deleteActivityLog(db, logId);
+    } else {
+      setActivityLogs((prev) => prev.filter((item) => item.id !== logId));
+    }
+  };
+
+  const handleClearAllActivityLogs = async () => {
+    if (db) {
+      try {
+        await Promise.all((activityLogs || []).map((item) => deleteActivityLog(db, item.id)));
+      } catch (err) {
+        console.error('[ACTIVITY LOG] Erro ao limpar histórico:', err);
+      }
+    } else {
+      setActivityLogs([]);
+    }
+  };
 
   // Derivar selecoes de eventos em tempo real
   const selecoes = useMemo(() => {
@@ -385,6 +417,7 @@ export default function App() {
     if (!db || !isAdminAuthenticated) {
       setClientes([]);
       setEventos([]);
+      setActivityLogs([]);
       return;
     }
 
@@ -488,11 +521,50 @@ export default function App() {
       console.error("[FIREBASE] Erro ao sincronizar eventos para o admin:", error);
     });
 
+    const qLogs = query(
+      collection(db, "activity_logs"),
+      orderBy("timestamp", "desc"),
+      limit(300)
+    );
+    const unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
+      const docs = [];
+      snapshot.forEach((docSnap) => {
+        docs.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setActivityLogs(docs);
+    }, (error) => {
+      console.error("[FIREBASE] Erro ao sincronizar histórico de atividades:", error);
+    });
+
     return () => {
       unsubscribeClientes();
       unsubscribeEventos();
+      unsubscribeLogs();
     };
   }, [db, isAdminAuthenticated]);
+
+  // Registra acesso do cliente à galeria (uma vez por sessão por galeria/cliente)
+  useEffect(() => {
+    if (activeTab !== 'magic-client' || !magicEvent || !magicClient) return;
+    if (magicEvent.acesso_restrito && !authenticatedGalleries[magicEvent.id]) return;
+
+    const sessionKey = `logged_access_${magicEvent.id}_${magicClient.id}`;
+    try {
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, String(Date.now()));
+    } catch (e) {}
+
+    recordActivity({
+      type: ACTIVITY_TYPES.GALLERY_ACCESS,
+      actorType: 'client',
+      clientId: magicClient.id,
+      clientName: magicClient.nome,
+      clientEmail: magicClient.email,
+      eventId: magicEvent.id,
+      eventTitle: magicEvent.titulo,
+      message: `${magicClient.nome} acessou a galeria ${magicEvent.titulo}`
+    });
+  }, [activeTab, magicEvent?.id, magicClient?.id, authenticatedGalleries]);
 
   // Sincroniza activeClient com sessionStorage de acordo com a galeria ativa
   useEffect(() => {
@@ -708,6 +780,18 @@ export default function App() {
 
     // Enviar e-mail de credenciais ao cliente
     const client = clientObj || clientes.find((c) => c.id === newEvent.id_cliente);
+
+    recordActivity({
+      type: ACTIVITY_TYPES.GALLERY_CREATED,
+      actorType: 'admin',
+      clientId: client?.id || null,
+      clientName: client?.nome || null,
+      clientEmail: client?.email || null,
+      eventId: newEvent.id,
+      eventTitle: newEvent.titulo,
+      message: `Nova galeria criada: ${newEvent.titulo}`,
+      details: client ? `Cliente vinculado: ${client.nome}` : 'Sem cliente vinculado inicialmente'
+    });
     if (client) {
       sendClientCredentialsEmail({
         email: client.email,
@@ -815,6 +899,24 @@ export default function App() {
       }
     } else {
       updatedSelected = currentSelected.filter(id => id !== photoId);
+    }
+
+    // Registra quando o cliente inicia a seleção (primeira foto selecionada)
+    if (isSelected && currentSelected.length === 0 && updatedSelected.length === 1) {
+      let clientObj = clientes.find((c) => c.id === clientId);
+      if (!clientObj && magicClient && magicClient.id === clientId) {
+        clientObj = magicClient;
+      }
+      recordActivity({
+        type: ACTIVITY_TYPES.SELECTION_STARTED,
+        actorType: 'client',
+        clientId: clientId,
+        clientName: clientObj?.nome || 'Cliente',
+        clientEmail: clientObj?.email || null,
+        eventId: targetEvent.id,
+        eventTitle: targetEvent.titulo,
+        message: `${clientObj?.nome || 'Cliente'} iniciou a seleção de fotos na galeria ${targetEvent.titulo}`
+      });
     }
 
     const updatedClientSelection = {
@@ -950,6 +1052,33 @@ export default function App() {
       }
     }
     console.log(`[EVENT] Seleção do cliente ${clientId} finalizada e travada.`);
+
+    let finalizedClient = clientes.find((c) => c.id === clientId);
+    if (!finalizedClient && magicClient && magicClient.id === clientId) {
+      finalizedClient = magicClient;
+    }
+    const selCount = (updatedClientSelection.fotos_selecionadas || []).length;
+    const effLimit = (updatedClientSelection.limite_fotos !== undefined && updatedClientSelection.limite_fotos !== null)
+      ? updatedClientSelection.limite_fotos
+      : targetEvent.limite_fotos;
+    const extrasCount = (!targetEvent.selecao_livre && effLimit !== null && effLimit !== undefined)
+      ? Math.max(0, selCount - effLimit)
+      : 0;
+
+    recordActivity({
+      type: ACTIVITY_TYPES.GALLERY_FINALIZED,
+      actorType: 'client',
+      clientId: clientId,
+      clientName: finalizedClient?.nome || 'Cliente',
+      clientEmail: finalizedClient?.email || null,
+      eventId: targetEvent.id,
+      eventTitle: targetEvent.titulo,
+      message: `${finalizedClient?.nome || 'Cliente'} finalizou a galeria ${targetEvent.titulo}`,
+      details: extrasCount > 0
+        ? `${selCount} fotos selecionadas (${extrasCount} extras)`
+        : `${selCount} fotos selecionadas`,
+      meta: { selectedCount: selCount, extrasCount }
+    });
   };
 
   // Reabrir evento / seleção
@@ -991,6 +1120,18 @@ export default function App() {
           return e;
         }));
       }
+
+      const reopenedClient = clientes.find((c) => c.id === clientId);
+      recordActivity({
+        type: ACTIVITY_TYPES.GALLERY_REOPENED,
+        actorType: 'admin',
+        clientId: clientId,
+        clientName: reopenedClient?.nome || null,
+        clientEmail: reopenedClient?.email || null,
+        eventId: targetEvent.id,
+        eventTitle: targetEvent.titulo,
+        message: `Seleção de ${reopenedClient?.nome || 'Cliente'} reaberta na galeria ${targetEvent.titulo}`
+      });
     } else {
       if (db) {
         updateDoc(doc(db, "eventos", eventId), { status: "ativa" })
@@ -1001,6 +1142,15 @@ export default function App() {
           prev.map(evt => evt.id === eventId ? { ...evt, status: 'ativa' } : evt)
         );
       }
+
+      const targetEvent = eventos.find(e => e.id === eventId);
+      recordActivity({
+        type: ACTIVITY_TYPES.GALLERY_REOPENED,
+        actorType: 'admin',
+        eventId: eventId,
+        eventTitle: targetEvent?.titulo || null,
+        message: `Galeria ${targetEvent?.titulo || ''} reaberta pelo fotógrafo`
+      });
     }
   };
 
@@ -1151,7 +1301,7 @@ export default function App() {
   };
 
   // Confirmar pagamento das fotos extras (manual pelo fotógrafo ou automático via PIX)
-  const handleConfirmPayment = (eventId, clientId = null) => {
+  const handleConfirmPayment = (eventId, clientId = null, source = 'manual') => {
     const updatePayload = { pagamento_extras_confirmado: true };
     if (clientId) {
       updatePayload[`selecoes_clientes.${clientId}.pagamento_extras_confirmado`] = true;
@@ -1204,12 +1354,46 @@ export default function App() {
     }
 
     console.log(`[PAYMENT] Pagamento das fotos extras confirmado para o evento: ${eventId}, cliente: ${clientId}`);
+
+    if (source === 'manual') {
+      const evtObj = eventos.find((e) => e.id === eventId) || (magicEvent?.id === eventId ? magicEvent : null);
+      const cliObj = clientes.find((c) => c.id === clientId) || (magicClient?.id === clientId ? magicClient : null);
+      recordActivity({
+        type: ACTIVITY_TYPES.PAYMENT_MANUAL,
+        actorType: 'admin',
+        clientId: clientId || null,
+        clientName: cliObj?.nome || null,
+        clientEmail: cliObj?.email || null,
+        eventId: eventId,
+        eventTitle: evtObj?.titulo || null,
+        message: `Pagamento manual confirmado${cliObj?.nome ? ` para ${cliObj.nome}` : ''} na galeria ${evtObj?.titulo || ''}`,
+        details: 'Confirmado pelo fotógrafo'
+      });
+    }
   };
 
   // Callback acionado quando o Mercado Pago confirma o PIX em tempo real
   const handlePaymentSuccess = (eventId, clientId, paymentData) => {
     console.log("[PAYMENT] Pagamento PIX aprovado via Mercado Pago:", paymentData);
-    handleConfirmPayment(eventId, clientId);
+    handleConfirmPayment(eventId, clientId, 'pix');
+    const evtObj = eventos.find((e) => e.id === eventId) || (magicEvent?.id === eventId ? magicEvent : null);
+    const cliObj = clientes.find((c) => c.id === clientId) || (magicClient?.id === clientId ? magicClient : null);
+    const amountVal = paymentData?.amount ? Number(paymentData.amount) : null;
+    const amountStr = amountVal && !isNaN(amountVal)
+      ? amountVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : '';
+    recordActivity({
+      type: ACTIVITY_TYPES.PAYMENT_PIX,
+      actorType: 'client',
+      clientId: clientId || null,
+      clientName: cliObj?.nome || 'Cliente',
+      clientEmail: cliObj?.email || null,
+      eventId: eventId,
+      eventTitle: evtObj?.titulo || null,
+      message: `${cliObj?.nome || 'Cliente'} pagou fotos extras via PIX${amountStr ? ` (${amountStr})` : ''} na galeria ${evtObj?.titulo || ''}`,
+      details: paymentData?.paymentId ? `PIX ID: ${paymentData.paymentId}` : 'Mercado Pago PIX aprovado',
+      meta: { amount: amountVal, paymentId: paymentData?.paymentId || null }
+    });
     const pixPayload = {
       paymentId: paymentData.paymentId || null,
       amount: paymentData.amount || null,
@@ -1835,6 +2019,17 @@ export default function App() {
           origem: 'autocadastro',
           createdAt: new Date().toISOString()
         });
+        recordActivity({
+          type: ACTIVITY_TYPES.CLIENT_REGISTER,
+          actorType: 'client',
+          clientId: targetClient?.id || null,
+          clientName: targetClient?.nome || registerNome.trim(),
+          clientEmail: trimmedEmail,
+          eventId: matchedEvent.id,
+          eventTitle: matchedEvent.titulo,
+          message: `${targetClient?.nome || registerNome.trim()} realizou autocadastro na galeria ${matchedEvent.titulo}`,
+          details: registerTelefone.trim() ? `Telefone: ${registerTelefone.trim()}` : ''
+        });
       }
 
       // 3. Associar cliente ao evento via arrayUnion
@@ -1993,6 +2188,19 @@ export default function App() {
           onBack={handleBackToWorkspace}
           onAddCliente={handleAddCliente}
           onAssociateClientToEvent={handleAssociateClientToEvent}
+          onLogRegister={(newCli) => {
+            recordActivity({
+              type: ACTIVITY_TYPES.CLIENT_REGISTER,
+              actorType: 'client',
+              clientId: newCli?.id || null,
+              clientName: newCli?.nome || 'Cliente',
+              clientEmail: newCli?.email || null,
+              eventId: matchedEvent.id,
+              eventTitle: matchedEvent.titulo,
+              message: `${newCli?.nome || 'Cliente'} realizou autocadastro na galeria ${matchedEvent.titulo}`,
+              details: newCli?.telefone ? `Telefone: ${newCli.telefone}` : ''
+            });
+          }}
         />
       );
     }
@@ -2012,6 +2220,19 @@ export default function App() {
           onBack={handleBackToWorkspace}
           onAddCliente={handleAddCliente}
           onAssociateClientToEvent={handleAssociateClientToEvent}
+          onLogRegister={(newCli) => {
+            recordActivity({
+              type: ACTIVITY_TYPES.CLIENT_REGISTER,
+              actorType: 'client',
+              clientId: newCli?.id || null,
+              clientName: newCli?.nome || 'Cliente',
+              clientEmail: newCli?.email || null,
+              eventId: matchedEvent.id,
+              eventTitle: matchedEvent.titulo,
+              message: `${newCli?.nome || 'Cliente'} realizou autocadastro na galeria ${matchedEvent.titulo}`,
+              details: newCli?.telefone ? `Telefone: ${newCli.telefone}` : ''
+            });
+          }}
         />
       );
     }
@@ -2070,6 +2291,9 @@ export default function App() {
           <span>Identificado como: <strong className="text-stone-850">{currentClient.nome}</strong> ({currentClient.email})</span>
           <button 
             onClick={() => {
+              try {
+                sessionStorage.removeItem(`logged_access_${matchedEvent.id}_${currentClient.id}`);
+              } catch (e) {}
               setActiveClient(null);
               setMagicClient(null);
               sessionStorage.removeItem(`active_client_${matchedEvent.id}`);
@@ -2109,6 +2333,19 @@ export default function App() {
             onToggleSelection={(photoId, isSelected) => handleToggleSelection(matchedEvent.id, photoId, isSelected, currentClient.id)}
             onFinalizeEvent={(eventId) => handleFinalizeEvent(eventId, currentClient.id)}
             onPaymentSuccess={(paymentData) => handlePaymentSuccess(matchedEvent.id, currentClient.id, paymentData)}
+            onDownloadPhotos={(count) => {
+              recordActivity({
+                type: ACTIVITY_TYPES.GALLERY_DOWNLOAD,
+                actorType: 'client',
+                clientId: currentClient.id,
+                clientName: currentClient.nome,
+                clientEmail: currentClient.email,
+                eventId: matchedEvent.id,
+                eventTitle: matchedEvent.titulo,
+                message: `${currentClient.nome} baixou ${count} ${count === 1 ? 'foto' : 'fotos'} da galeria ${matchedEvent.titulo}`,
+                meta: { count }
+              });
+            }}
             clienteObj={currentClient}
             eventoObj={matchedEvent}
             mercadoPagoToken={contato?.mercado_pago_token || import.meta.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || ''}
@@ -2932,6 +3169,9 @@ export default function App() {
               onDeleteCategoryFornecedor={handleDeleteCategoryFornecedor}
               categoriasGaleria={categoriasGaleria}
               onSaveCategoriasGaleria={handleSaveCategoriasGaleria}
+              activityLogs={activityLogs}
+              onDeleteActivityLog={handleDeleteActivityLog}
+              onClearAllActivityLogs={handleClearAllActivityLogs}
             />
           )
         )}
@@ -3251,7 +3491,7 @@ export default function App() {
   );
 }
 
-function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent }) {
+function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAccessSuccess, onBack, onAddCliente, onAssociateClientToEvent, onLogRegister }) {
   const allowAutoRegister = event?.permitir_auto_cadastro !== false;
   const [tab, setTab] = useState(initialClient ? 'login' : (allowAutoRegister ? 'register' : 'login')); // 'register' | 'login'
   const [email, setEmail] = useState(initialClient?.email || '');
@@ -3337,6 +3577,7 @@ function ClientAccessPortal({ event, initialClient = null, onCheckEmail, onAcces
 
       if (newClient && newClient.id) {
         onAssociateClientToEvent(event.id, newClient.id);
+        if (onLogRegister) onLogRegister(newClient);
         onAccessSuccess(newClient);
       } else {
         setError('Não foi possível concluir o cadastro. Tente novamente.');

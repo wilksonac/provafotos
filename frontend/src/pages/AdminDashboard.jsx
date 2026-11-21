@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import PaymentReport from '../components/PaymentReport';
+import ActivityHistory from '../components/ActivityHistory';
 
 const getEventStatus = (evento) => {
   if (evento.status === 'finalizada') return 'finalizada';
@@ -87,10 +88,38 @@ export default function AdminDashboard({
   onAddCategoryFornecedor,
   onDeleteCategoryFornecedor,
   categoriasGaleria = ['Formaturas', 'Casamentos', 'Ensaios', 'Infantil', 'Corporativo', 'Outros'],
-  onSaveCategoriasGaleria
+  onSaveCategoriasGaleria,
+  activityLogs = [],
+  onDeleteActivityLog,
+  onClearAllActivityLogs
 }) {
   const [activeModule, setActiveModule] = useState('prova'); // 'prova' | 'site'
-  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'portfolio' | 'real-weddings' | 'blog'
+  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'clients' | 'new-client' | 'new-gallery' | 'history' | 'portfolio' | 'real-weddings' | 'blog'
+
+  // Controle de atividades não vistas desde a última visita à aba Histórico
+  const [lastSeenLogTs, setLastSeenLogTs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wilkson_last_seen_log_ts');
+      return saved ? parseInt(saved, 10) || 0 : 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    if (activeSubTab === 'history') {
+      const now = Date.now();
+      setLastSeenLogTs(now);
+      try {
+        localStorage.setItem('wilkson_last_seen_log_ts', String(now));
+      } catch (e) {}
+    }
+  }, [activeSubTab, activityLogs.length]);
+
+  const unreadLogsCount = (activityLogs || []).filter((log) => {
+    const ts = typeof log.timestamp === 'number' ? log.timestamp : (log.createdAt ? Date.parse(log.createdAt) || 0 : 0);
+    return ts > lastSeenLogTs && log.actorType === 'client';
+  }).length;
   
   // Calcular métricas do Firebase (Cotas Gratuitas)
   const totalStorageBytes = eventos.reduce((sum, evt) => {
@@ -966,6 +995,21 @@ export default function AdminDashboard({
                 }`}
               >
                 <span>💳</span> Pagamentos & Relatórios
+              </button>
+              <button
+                onClick={() => setActiveSubTab('history')}
+                className={`px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all rounded flex items-center gap-1.5 ${
+                  activeSubTab === 'history'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200/70'
+                }`}
+              >
+                <span>🕒</span> Histórico
+                {unreadLogsCount > 0 && activeSubTab !== 'history' && (
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-sky-600 text-white text-[9px] font-bold leading-tight">
+                    {unreadLogsCount > 99 ? '99+' : unreadLogsCount}
+                  </span>
+                )}
               </button>
             </>
           ) : (
@@ -3178,6 +3222,16 @@ export default function AdminDashboard({
           setShowMercadoPagoToken={setShowMercadoPagoToken}
           onSaveContato={onSaveContato}
           onConfirmPayment={onConfirmPayment}
+        />
+      )}
+
+      {/* Sub-tab: Histórico / Log de Atividades */}
+      {activeSubTab === 'history' && (
+        <ActivityHistory
+          logs={activityLogs}
+          eventos={eventos}
+          onDeleteLog={onDeleteActivityLog}
+          onClearAllLogs={onClearAllActivityLogs}
         />
       )}
 

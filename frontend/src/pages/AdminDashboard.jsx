@@ -2902,8 +2902,32 @@ export default function AdminDashboard({
                   Adicionar
                 </button>
               </div>
+
+              {/* Sugestões rápidas de categorias/pastas frequentes */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[9px] uppercase tracking-wider text-stone-400 font-bold">Sugestões:</span>
+                {['Destaques', 'Geral', 'Preparativos', 'Cerimônia', 'Recepção', 'Ensaio'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => {
+                      if (!categoriasFotos.some(c => c.toLowerCase() === sug.toLowerCase())) {
+                        setCategoriasFotos([...categoriasFotos, sug]);
+                      }
+                    }}
+                    className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border transition-colors ${
+                      categoriasFotos.some(c => c.toLowerCase() === sug.toLowerCase())
+                        ? 'bg-stone-100 text-stone-400 border-stone-200 cursor-default opacity-60'
+                        : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-300 shadow-2xs cursor-pointer'
+                    }`}
+                  >
+                    + {sug}
+                  </button>
+                ))}
+              </div>
+
               <p className="text-[9.5px] text-stone-400 leading-normal">
-                * Digite o nome da categoria e clique em "Adicionar" ou pressione Enter. As fotos adicionadas a essas categorias aparecerão organizadas em abas correspondentes na visualização do cliente final.
+                * Digite o nome da categoria ou clique nas sugestões acima. As fotos vinculadas a essas pastas aparecerão organizadas como filtros para os clientes selecionarem com facilidade.
               </p>
             </div>
           </div>
@@ -4857,9 +4881,31 @@ export default function AdminDashboard({
         const modalSelectedPhotos = getSelectedPhotosForEvent(modalEvent, null);
         const modalSelectedIds = new Set(modalSelectedPhotos.map(p => p.id));
 
+        const modalCategories = (() => {
+          const cats = [...(modalEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção'])];
+          if (!cats.some(c => c.toLowerCase() === 'destaques' || c.toLowerCase() === 'destaque')) {
+            cats.unshift('Destaques');
+          }
+          if (!cats.some(c => c.toLowerCase() === 'geral')) {
+            cats.push('Geral');
+          }
+          return cats;
+        })();
+
         const photos = photosModalFilter === 'selected'
           ? allPhotos.filter(p => modalSelectedIds.has(p.id))
-          : allPhotos;
+          : photosModalFilter === 'all'
+            ? allPhotos
+            : allPhotos.filter(p => {
+                const norm = photosModalFilter.toLowerCase();
+                if (norm === 'destaques' || norm === 'destaque') {
+                  return p.destaque || String(p.cena || '').toLowerCase() === 'destaques' || String(p.cena || '').toLowerCase() === 'destaque';
+                }
+                if (norm === 'geral') {
+                  return String(p.cena || '').toLowerCase() === 'geral' || (!p.cena && !p.destaque);
+                }
+                return String(p.cena || '').toLowerCase() === norm;
+              });
 
         return typeof document !== 'undefined' && createPortal(
           <div 
@@ -4886,12 +4932,12 @@ export default function AdminDashboard({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Filtro Todas vs Selecionadas */}
-                  <div className="flex bg-stone-200/70 p-0.5 rounded border border-stone-250 text-[9px] font-bold">
+                  {/* Filtro Todas vs Selecionadas vs Pastas */}
+                  <div className="flex bg-stone-200/70 p-0.5 rounded border border-stone-250 text-[9px] font-bold max-w-[50vw] overflow-x-auto scrollbar-none flex-nowrap items-center">
                     <button
                       type="button"
                       onClick={() => setPhotosModalFilter('all')}
-                      className={`px-2.5 py-1 rounded transition-all uppercase ${
+                      className={`px-2.5 py-1 rounded transition-all uppercase whitespace-nowrap ${
                         photosModalFilter === 'all' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500 hover:text-stone-800'
                       }`}
                     >
@@ -4900,12 +4946,37 @@ export default function AdminDashboard({
                     <button
                       type="button"
                       onClick={() => setPhotosModalFilter('selected')}
-                      className={`px-2.5 py-1 rounded transition-all uppercase ${
+                      className={`px-2.5 py-1 rounded transition-all uppercase whitespace-nowrap ${
                         photosModalFilter === 'selected' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500 hover:text-stone-800'
                       }`}
                     >
                       Selecionadas ({modalSelectedPhotos.length})
                     </button>
+                    {modalCategories.map((cat) => {
+                      const count = allPhotos.filter(p => {
+                        const norm = cat.toLowerCase();
+                        if (norm === 'destaques' || norm === 'destaque') {
+                          return p.destaque || String(p.cena || '').toLowerCase() === 'destaques' || String(p.cena || '').toLowerCase() === 'destaque';
+                        }
+                        if (norm === 'geral') {
+                          return String(p.cena || '').toLowerCase() === 'geral' || (!p.cena && !p.destaque);
+                        }
+                        return String(p.cena || '').toLowerCase() === norm;
+                      }).length;
+                      if (count === 0) return null;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setPhotosModalFilter(cat)}
+                          className={`px-2.5 py-1 rounded transition-all uppercase whitespace-nowrap ${
+                            photosModalFilter === cat ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500 hover:text-stone-800'
+                          }`}
+                        >
+                          {cat} ({count})
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <button
@@ -4983,8 +5054,8 @@ export default function AdminDashboard({
                                 onChange={(e) => onUpdatePhotoCategory && onUpdatePhotoCategory(modalEvent.id, photo.id, e.target.value)}
                                 className="flex-grow px-1 py-0.5 border border-stone-200 rounded text-[9px] focus:outline-none bg-white cursor-pointer"
                               >
-                                <option value="">Sem categoria</option>
-                                {(modalEvent.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']).map((cat, idx) => (
+                                <option value="">Sem categoria (Geral)</option>
+                                {modalCategories.map((cat, idx) => (
                                   <option key={idx} value={cat}>{cat}</option>
                                 ))}
                               </select>

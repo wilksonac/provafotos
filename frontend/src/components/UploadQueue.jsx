@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { storage } from '../lib/firebase';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -40,14 +40,25 @@ export default function UploadQueue({
   const [isDragging, setIsDragging] = useState(false);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
 
+  const combinedCategories = useMemo(() => {
+    const list = [...(categories || [])];
+    if (!list.some(c => c.toLowerCase() === 'destaques' || c.toLowerCase() === 'destaque')) {
+      list.unshift('Destaques');
+    }
+    if (!list.some(c => c.toLowerCase() === 'geral')) {
+      list.push('Geral');
+    }
+    return list;
+  }, [categories]);
+
   const [batchCategory, setBatchCategory] = useState(categories[0] || '');
   const [batchDestaque, setBatchDestaque] = useState(false);
 
   useEffect(() => {
-    if (categories && categories.length > 0 && !batchCategory) {
-      setBatchCategory(categories[0]);
+    if (combinedCategories && combinedCategories.length > 0 && !batchCategory) {
+      setBatchCategory(combinedCategories[0]);
     }
-  }, [categories]);
+  }, [combinedCategories]);
 
   const uploadTasksRef = useRef({});
   const queueRef = useRef([]);
@@ -462,13 +473,21 @@ const compressImage = (file) => {
               onChange={(e) => {
                 const newCat = e.target.value;
                 setBatchCategory(newCat);
+                const isDest = newCat.toLowerCase() === 'destaques' || newCat.toLowerCase() === 'destaque';
+                if (isDest && !batchDestaque) {
+                  setBatchDestaque(true);
+                }
                 // Atualiza todos os arquivos ociosos na fila com esta categoria
-                setQueue(prev => prev.map(item => item.status === 'idle' ? { ...item, categoria: newCat } : item));
+                setQueue(prev => prev.map(item => item.status === 'idle' ? { 
+                  ...item, 
+                  categoria: newCat,
+                  destaque: isDest ? true : item.destaque
+                } : item));
               }}
               className="px-2.5 py-1 border border-stone-250 rounded bg-white text-xs focus:outline-none focus:border-stone-900 cursor-pointer"
             >
-              <option value="">Sem categoria</option>
-              {categories.map((cat, idx) => (
+              <option value="">Sem categoria (Geral)</option>
+              {combinedCategories.map((cat, idx) => (
                 <option key={idx} value={cat}>{cat}</option>
               ))}
             </select>

@@ -2,6 +2,31 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { FixedSizeGrid as Grid } from 'react-window';
 import PaymentModal from './PaymentModal';
 
+// Helper centralizado para verificar se uma foto pertence a uma cena/pasta
+const isPhotoInScene = (photo, scene) => {
+  if (!photo) return false;
+  if (scene === 'Todas') return true;
+  if (scene === 'Selecionadas') return !!photo.selecionada;
+
+  const sceneNorm = String(scene || '').trim().toLowerCase();
+  const photoCenaNorm = String(photo.cena || '').trim().toLowerCase();
+
+  // Destaques / Destaque
+  if (sceneNorm === 'destaques' || sceneNorm === 'destaque') {
+    return !!photo.destaque || photoCenaNorm === 'destaques' || photoCenaNorm === 'destaque';
+  }
+
+  // Geral
+  if (sceneNorm === 'geral') {
+    if (photoCenaNorm === 'geral') return true;
+    if (!photoCenaNorm && !photo.destaque) return true;
+    return false;
+  }
+
+  // Categorias específicas (case-insensitive e trimmed)
+  return photoCenaNorm === sceneNorm;
+};
+
 // Gerador de fotos fictícias com semente única baseada no ID do evento.
 // Isso garante que cada galeria nova tenha fotos totalmente distintas e exclusivas.
 const generateMockPhotos = (count, eventId) => {
@@ -9,7 +34,9 @@ const generateMockPhotos = (count, eventId) => {
     id: `photo_${i}`,
     name: `FOTO_${(i + 1).toString().padStart(4, '0')}.jpg`,
     url_storage: `https://picsum.photos/seed/${eventId}_img_${i}/800/600`,
-    selecionada: false
+    selecionada: false,
+    destaque: false,
+    cena: ''
   }));
 };
 
@@ -133,6 +160,13 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
             </div>
           )}
 
+          {/* Badge de Destaque na foto */}
+          {(photo.destaque || String(photo.cena || '').trim().toLowerCase() === 'destaques' || String(photo.cena || '').trim().toLowerCase() === 'destaque') && (
+            <div className="absolute top-3 left-3 bg-amber-400 text-stone-950 text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm z-10 pointer-events-none">
+              ★ Destaque
+            </div>
+          )}
+
           {/* Indicador de Seleção / Coração no Canto */}
           {!isLocked && (
             <div className="absolute top-3 right-3 transition-opacity duration-300 z-10">
@@ -216,7 +250,8 @@ export default function PhotoVirtualGrid({
           url_storage: p,
           name: `Foto ${idx + 1}`,
           selecionada: false,
-          destaque: false
+          destaque: false,
+          cena: ''
         };
       }
       return {
@@ -224,7 +259,8 @@ export default function PhotoVirtualGrid({
         url_storage: p.url_storage || p.url || '',
         name: p.name || `Foto ${idx + 1}`,
         selecionada: !!p.selecionada,
-        destaque: !!p.destaque
+        destaque: !!p.destaque,
+        cena: p.cena || ''
       };
     });
   });
@@ -232,20 +268,22 @@ export default function PhotoVirtualGrid({
   // Sincronizar estado local de fotos quando a prop initialPhotos mudar no banco de dados
   useEffect(() => {
     if (isDemo && (!initialPhotos || initialPhotos.length === 0)) return;
-    setPhotos((prevPhotos) => {
+    setPhotos(() => {
       return (initialPhotos || []).map((p, idx) => {
         const photoObj = typeof p === 'string' ? {
           id: p,
           url_storage: p,
           name: `Foto ${idx + 1}`,
           selecionada: false,
-          destaque: false
+          destaque: false,
+          cena: ''
         } : {
           id: p.id || p.url_storage || `photo_${idx}`,
           url_storage: p.url_storage || p.url || '',
           name: p.name || `Foto ${idx + 1}`,
           selecionada: !!p.selecionada,
-          destaque: !!p.destaque
+          destaque: !!p.destaque,
+          cena: p.cena || ''
         };
         return photoObj;
       });
@@ -268,22 +306,58 @@ export default function PhotoVirtualGrid({
 
   const availableScenes = useMemo(() => {
     const scenes = ['Todas', 'Selecionadas'];
-    const cats = categoriasFotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção'];
     
-    cats.forEach(cat => {
-      if (cat === 'Destaques') {
-        if (photos.some(p => p.destaque)) {
-          scenes.push('Destaques');
-        }
-      } else {
-        if (photos.some(p => p.cena === cat)) {
-          scenes.push(cat);
-        }
+    // Categorias configuradas no evento ou padrão caso vazio
+    const configuredCats = (Array.isArray(categoriasFotos) && categoriasFotos.length > 0)
+      ? categoriasFotos
+      : ['Destaques', 'Geral'];
+
+    // Coleta candidatos únicos respeitando a grafia original
+    const candidates = [];
+    const addCandidate = (name) => {
+      const trimmed = String(name || '').trim();
+      if (!trimmed) return;
+      const lower = trimmed.toLowerCase();
+      if (lower === 'todas' || lower === 'selecionadas') return;
+      if (!candidates.some(c => c.toLowerCase() === lower)) {
+        candidates.push(trimmed);
+      }
+    };
+
+    // 1. Adicionar categorias configuradas pelo fotógrafo
+    configuredCats.forEach(addCandidate);
+
+    // 2. Adicionar categorias encontradas diretamente nas fotos
+    photos.forEach(p => {
+      if (p.cena) addCandidate(p.cena);
+      if (p.destaque) addCandidate('Destaques');
+    });
+
+    // 3. Se houver fotos sem categoria enquanto outras possuem categoria ou destaque, adicionar "Geral"
+    const hasUncategorized = photos.some(p => !p.cena && !p.destaque);
+    const hasCategorized = photos.some(p => !!p.cena || !!p.destaque);
+    if (hasUncategorized && hasCategorized) {
+      addCandidate('Geral');
+    }
+
+    // 4. Incluir apenas pastas/cenas que contenham fotos reais
+    candidates.forEach(cat => {
+      if (photos.some(p => isPhotoInScene(p, cat))) {
+        scenes.push(cat);
       }
     });
-    
+
     return scenes;
   }, [photos, categoriasFotos]);
+
+  // Contagem dinâmica de fotos por aba/pasta
+  const sceneCounts = useMemo(() => {
+    const counts = {};
+    availableScenes.forEach((scene) => {
+      counts[scene] = photos.filter((p) => isPhotoInScene(p, scene)).length;
+    });
+    return counts;
+  }, [photos, availableScenes]);
 
   useEffect(() => {
     if (!availableScenes.includes(activeScene)) {
@@ -451,6 +525,14 @@ export default function PhotoVirtualGrid({
     if (highlightedPhoto) {
       return highlightedPhoto.url_storage;
     }
+    // Ou foto na pasta 'Destaques'
+    const folderDestaquePhoto = (photos || []).find(p => {
+      const c = String(p.cena || '').trim().toLowerCase();
+      return c === 'destaques' || c === 'destaque';
+    });
+    if (folderDestaquePhoto) {
+      return folderDestaquePhoto.url_storage;
+    }
 
     switch (tipoGaleria) {
       case 'casamento':
@@ -482,16 +564,7 @@ export default function PhotoVirtualGrid({
 
   // Filtragem dinâmica de fotos com base na cena ou aba selecionada (com suporte a ver apenas selecionadas)
   const visiblePhotos = useMemo(() => {
-    let filtered = photos || [];
-    if (activeScene === 'Selecionadas') {
-      filtered = filtered.filter(p => p.selecionada);
-    } else if (activeScene === 'Destaques') {
-      filtered = filtered.filter(p => p.destaque);
-    } else if (activeScene !== 'Todas') {
-      // Suporte para outras subcategorias caso existam no objeto da foto
-      filtered = filtered.filter(p => p.cena === activeScene);
-    }
-    return filtered;
+    return (photos || []).filter((p) => isPhotoInScene(p, activeScene));
   }, [photos, activeScene]);
 
   const containerRef = useRef(null);
@@ -714,27 +787,41 @@ export default function PhotoVirtualGrid({
         </div>
 
         {/* 2. Scene Navigation Bar */}
-        <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start">
-            {availableScenes.map((scene) => (
-              <button
-                key={scene}
-                onClick={() => {
-                  setActiveScene(scene);
-                  setActiveLightboxIndex(null); // Fecha o lightbox se mudar de aba para evitar índices inválidos
-                }}
-                className={`text-xs font-semibold uppercase tracking-widest pb-1 transition-all border-b-2 whitespace-nowrap ${
-                  activeScene === scene
-                    ? 'border-stone-900 text-stone-950'
-                    : 'border-transparent text-stone-400 hover:text-stone-700'
-                }`}
-              >
-                {scene}
-              </button>
-            ))}
+        <div className="w-full bg-white border-b border-stone-200/80 px-4 sm:px-8 py-2.5 sm:py-3.5 flex flex-col sm:flex-row justify-between items-center gap-2.5 sm:gap-4">
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-none py-1 w-full sm:w-auto justify-start sm:justify-start flex-nowrap items-center">
+            {availableScenes.map((scene) => {
+              const count = sceneCounts[scene];
+              const isSelected = activeScene === scene;
+              return (
+                <button
+                  key={scene}
+                  type="button"
+                  onClick={() => {
+                    setActiveScene(scene);
+                    setActiveLightboxIndex(null); // Fecha o lightbox se mudar de aba para evitar índices inválidos
+                  }}
+                  className={`text-xs font-semibold uppercase tracking-wider pb-1 transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'border-stone-900 text-stone-950 font-bold'
+                      : 'border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  <span>{scene}</span>
+                  {count !== undefined && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-sans transition-colors ${
+                      isSelected
+                        ? 'bg-stone-900 text-white font-bold'
+                        : 'bg-stone-100 text-stone-500 font-medium'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-shrink-0">
             <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
               currentStatus === 'ativa'
                 ? 'bg-stone-50 border-stone-200 text-stone-600'
@@ -998,7 +1085,18 @@ export default function PhotoVirtualGrid({
           <div className="w-full px-6 py-4 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent">
             <div>
               <span className="text-[9px] uppercase tracking-widest text-stone-400 font-bold">Visualização Ampliada</span>
-              <h4 className="text-xs font-semibold tracking-wider text-stone-200 mt-0.5">{activeLightboxPhoto.name}</h4>
+              <div className="flex items-center gap-2 mt-0.5">
+                <h4 className="text-xs font-semibold tracking-wider text-stone-200">{activeLightboxPhoto.name}</h4>
+                {(activeLightboxPhoto.destaque || String(activeLightboxPhoto.cena || '').trim().toLowerCase() === 'destaques' || String(activeLightboxPhoto.cena || '').trim().toLowerCase() === 'destaque') ? (
+                  <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400 text-stone-950">
+                    ★ Destaque
+                  </span>
+                ) : activeLightboxPhoto.cena ? (
+                  <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-stone-300">
+                    {activeLightboxPhoto.cena}
+                  </span>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-center gap-4">

@@ -168,7 +168,18 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
           )}
 
           {/* Indicador de Seleção / Coração no Canto */}
-          {!isLocked && (
+          {photo.travada ? (
+            <div className="absolute top-3 right-3 z-10" title="Foto confirmada anteriormente (Travada)">
+              <button
+                type="button"
+                onClick={handleHeartClick}
+                className="p-1.5 px-2 rounded-full backdrop-blur-md bg-stone-900/90 hover:bg-stone-950 text-amber-400 border border-amber-400/40 shadow-md flex items-center gap-1 transition-all duration-200"
+              >
+                <span className="text-xs">🔒</span>
+                <span className="text-[8px] font-extrabold uppercase tracking-wider text-amber-300">Fixa</span>
+              </button>
+            </div>
+          ) : !isLocked && (
             <div className="absolute top-3 right-3 transition-opacity duration-300 z-10">
               <button
                 type="button"
@@ -198,9 +209,15 @@ const GridCell = React.memo(({ columnIndex, rowIndex, style, data }) => {
             {photo.name}
           </span>
           {isSelected && (
-            <span className="text-[9px] font-bold text-stone-900 uppercase tracking-widest animate-pulse">
-              Selecionada
-            </span>
+            photo.travada ? (
+              <span className="text-[8px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-250 uppercase tracking-wider flex items-center gap-0.5">
+                <span>🔒</span> Confirmada
+              </span>
+            ) : (
+              <span className="text-[9px] font-bold text-stone-900 uppercase tracking-widest animate-pulse">
+                Selecionada
+              </span>
+            )
           )}
         </div>
       </div>
@@ -251,7 +268,8 @@ export default function PhotoVirtualGrid({
           name: `Foto ${idx + 1}`,
           selecionada: false,
           destaque: false,
-          cena: ''
+          cena: '',
+          travada: false
         };
       }
       return {
@@ -260,7 +278,8 @@ export default function PhotoVirtualGrid({
         name: p.name || `Foto ${idx + 1}`,
         selecionada: !!p.selecionada,
         destaque: !!p.destaque,
-        cena: p.cena || ''
+        cena: p.cena || '',
+        travada: !!p.travada
       };
     });
   });
@@ -276,14 +295,16 @@ export default function PhotoVirtualGrid({
           name: `Foto ${idx + 1}`,
           selecionada: false,
           destaque: false,
-          cena: ''
+          cena: '',
+          travada: false
         } : {
           id: p.id || p.url_storage || `photo_${idx}`,
           url_storage: p.url_storage || p.url || '',
           name: p.name || `Foto ${idx + 1}`,
           selecionada: !!p.selecionada,
           destaque: !!p.destaque,
-          cena: p.cena || ''
+          cena: p.cena || '',
+          travada: !!p.travada
         };
         return photoObj;
       });
@@ -297,6 +318,10 @@ export default function PhotoVirtualGrid({
 
   const selectedCount = useMemo(() => {
     return photos.filter((p) => p.selecionada).length;
+  }, [photos]);
+
+  const lockedCount = useMemo(() => {
+    return photos.filter((p) => p.selecionada && p.travada).length;
   }, [photos]);
 
   const [currentStatus, setCurrentStatus] = useState(statusEvento);
@@ -628,6 +653,12 @@ export default function PhotoVirtualGrid({
       
       const nextState = !targetPhoto.selecionada;
       
+      // Trava de Fotos Confirmadas Anteriormente
+      if (!nextState && targetPhoto.travada) {
+        triggerSecurityWarning('🔒 Esta foto já foi confirmada anteriormente e está travada. Você pode selecionar fotos adicionais!');
+        return prevPhotos;
+      }
+      
       // Validação de Limite
       if (nextState && !selecaoLivre && (limiteFotos !== null && limiteFotos !== undefined) && currentSelectedCount >= limiteFotos) {
         if (!permitirExtras) {
@@ -648,7 +679,7 @@ export default function PhotoVirtualGrid({
         photo.id === photoId ? { ...photo, selecionada: nextState } : photo
       );
     });
-  }, [currentStatus, limiteFotos, selecaoLivre, permitirExtras, onToggleSelection]);
+  }, [currentStatus, limiteFotos, selecaoLivre, permitirExtras, onToggleSelection, triggerSecurityWarning]);
 
   const handleFinalize = () => {
     setCurrentStatus('finalizada');
@@ -894,13 +925,25 @@ export default function PhotoVirtualGrid({
                     (+{selectedCount - limiteFotos})
                   </span>
                 )}
+                {lockedCount > 0 && (
+                  <span className="text-amber-700 font-bold ml-1 text-[9px] bg-amber-50 px-1 py-0.5 rounded border border-amber-200">
+                    🔒 {lockedCount} fixas
+                  </span>
+                )}
               </span>
             </div>
           ) : (
             selecaoLivre ? (
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-stone-455">Fotos Escolhidas</span>
-                <span className="text-xs font-bold text-stone-950 uppercase tracking-wider">{selectedCount} selecionadas</span>
+                <span className="text-xs font-bold text-stone-950 uppercase tracking-wider flex items-center gap-1.5">
+                  {selectedCount} selecionadas
+                  {lockedCount > 0 && (
+                    <span className="text-amber-700 font-bold text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      🔒 {lockedCount} confirmadas
+                    </span>
+                  )}
+                </span>
               </div>
             ) : (
               <div>
@@ -908,6 +951,11 @@ export default function PhotoVirtualGrid({
                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Favoritas</span>
                   <span className="text-xs font-bold text-stone-950 whitespace-nowrap">
                     {selectedCount} <span className="text-stone-400 font-medium">de</span> {(limiteFotos !== null && limiteFotos !== undefined) ? limiteFotos : 'livre'}
+                    {lockedCount > 0 && (
+                      <span className="text-amber-700 font-bold text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 ml-1.5">
+                        🔒 {lockedCount} confirmadas
+                      </span>
+                    )}
                     {permitirExtras && (limiteFotos !== null && limiteFotos !== undefined) && selectedCount > limiteFotos && (
                       <span className="text-amber-600 font-extrabold ml-1">
                         {' '}
@@ -1221,14 +1269,25 @@ export default function PhotoVirtualGrid({
                 disabled={currentStatus !== 'ativa'}
                 className={`px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2.5 shadow-lg transition-all duration-300 ${
                   activeLightboxPhoto.selecionada
-                    ? 'bg-stone-1050 hover:bg-stone-900 border border-stone-800 text-stone-100'
+                    ? activeLightboxPhoto.travada
+                      ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 font-extrabold ring-2 ring-amber-300'
+                      : 'bg-stone-1050 hover:bg-stone-900 border border-stone-800 text-stone-100'
                     : 'bg-white hover:bg-stone-100 text-stone-900'
                 }`}
               >
-                <svg className="w-4 h-4" fill={activeLightboxPhoto.selecionada ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                {activeLightboxPhoto.selecionada ? 'Favoritada' : 'Adicionar aos Favoritos'}
+                {activeLightboxPhoto.travada ? (
+                  <>
+                    <span className="text-sm">🔒</span>
+                    Foto Confirmada (Travada)
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill={activeLightboxPhoto.selecionada ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    {activeLightboxPhoto.selecionada ? 'Favoritada' : 'Adicionar aos Favoritos'}
+                  </>
+                )}
               </button>
             </div>
             

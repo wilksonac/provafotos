@@ -898,6 +898,12 @@ export default function App() {
         updatedSelected = currentSelected;
       }
     } else {
+      // GUARD: Se a foto estiver travada, impede o cliente de desmarcar
+      const lockedPhotos = clientSelection.fotos_travadas || [];
+      if (lockedPhotos.includes(photoId)) {
+        console.warn(`[SELECAO] Tentativa de desmarcar foto travada ignorada: ${photoId}`);
+        return;
+      }
       updatedSelected = currentSelected.filter(id => id !== photoId);
     }
 
@@ -976,11 +982,16 @@ export default function App() {
       data_finalizacao: null
     };
     const dateStr = new Date().toISOString();
+    const shouldLock = targetEvent.travar_fotos_finalizadas !== false;
+    const lockedPhotos = shouldLock
+      ? [...(clientSelection.fotos_selecionadas || [])]
+      : (clientSelection.fotos_travadas || []);
 
     const updatedClientSelection = {
       ...clientSelection,
       status: "finalizada",
-      data_finalizacao: dateStr
+      data_finalizacao: dateStr,
+      fotos_travadas: lockedPhotos
     };
 
     if (db) {
@@ -1082,7 +1093,7 @@ export default function App() {
   };
 
   // Reabrir evento / seleção
-  const handleReopenEvento = (eventId, clientId = null) => {
+  const handleReopenEvento = (eventId, clientId = null, lockPreviousPhotos = true) => {
     if (clientId) {
       const targetEvent = eventos.find(e => e.id === eventId);
       if (!targetEvent) return;
@@ -1094,17 +1105,24 @@ export default function App() {
         data_finalizacao: null
       };
 
+      const lockedPhotos = lockPreviousPhotos
+        ? (clientSelection.fotos_travadas && clientSelection.fotos_travadas.length > 0
+            ? clientSelection.fotos_travadas
+            : [...(clientSelection.fotos_selecionadas || [])])
+        : [];
+
       const updatedClientSelection = {
         ...clientSelection,
         status: "em_progresso",
-        data_finalizacao: null
+        data_finalizacao: null,
+        fotos_travadas: lockedPhotos
       };
 
       if (db) {
         updateDoc(doc(db, "eventos", eventId), {
           [`selecoes_clientes.${clientId}`]: updatedClientSelection
         })
-          .then(() => console.log("[FIREBASE] Seleção reaberta para cliente:", clientId))
+          .then(() => console.log("[FIREBASE] Seleção reaberta para cliente:", clientId, "Fotos travadas:", lockedPhotos.length))
           .catch(err => console.error("[FIREBASE] Erro ao reabrir seleção:", err));
       } else {
         setEventos(prev => prev.map(e => {
@@ -1130,7 +1148,7 @@ export default function App() {
         clientEmail: reopenedClient?.email || null,
         eventId: targetEvent.id,
         eventTitle: targetEvent.titulo,
-        message: `Seleção de ${reopenedClient?.nome || 'Cliente'} reaberta na galeria ${targetEvent.titulo}`
+        message: `Seleção de ${reopenedClient?.nome || 'Cliente'} reaberta na galeria ${targetEvent.titulo} (${lockedPhotos.length} fotos travadas)`
       });
     } else {
       if (db) {
@@ -1151,6 +1169,63 @@ export default function App() {
         eventTitle: targetEvent?.titulo || null,
         message: `Galeria ${targetEvent?.titulo || ''} reaberta pelo fotógrafo`
       });
+    }
+  };
+
+  // Travar ou destravar diretamente as fotos selecionadas de um cliente
+  const handleToggleClientLockedPhotos = (eventId, clientId, shouldLock) => {
+    if (!eventId || !clientId) return;
+    let targetEvent = eventos.find(e => e.id === eventId);
+    if (!targetEvent && magicEvent && magicEvent.id === eventId) {
+      targetEvent = magicEvent;
+    }
+    if (!targetEvent) return;
+
+    const eventSelections = targetEvent.selecoes_clientes || {};
+    const clientSelection = eventSelections[clientId] || {
+      fotos_selecionadas: [],
+      status: 'em_progresso',
+      data_finalizacao: null
+    };
+
+    const lockedPhotos = shouldLock ? [...(clientSelection.fotos_selecionadas || [])] : [];
+
+    const updatedClientSelection = {
+      ...clientSelection,
+      fotos_travadas: lockedPhotos
+    };
+
+    if (db) {
+      updateDoc(doc(db, "eventos", eventId), {
+        [`selecoes_clientes.${clientId}`]: updatedClientSelection
+      })
+        .then(() => console.log(`[FIREBASE] Fotos ${shouldLock ? 'travadas' : 'destravadas'} para cliente:`, clientId))
+        .catch(err => console.error("[FIREBASE] Erro ao alterar trava de fotos:", err));
+    } else {
+      setEventos(prev => prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            selecoes_clientes: {
+              ...(e.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        }
+        return e;
+      }));
+      if (magicEvent && magicEvent.id === eventId) {
+        setMagicEvent(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            selecoes_clientes: {
+              ...(prev.selecoes_clientes || {}),
+              [clientId]: updatedClientSelection
+            }
+          };
+        });
+      }
     }
   };
 
@@ -2241,6 +2316,7 @@ export default function App() {
     const selectionId = `${matchedEvent.id}_${currentClient.id}`;
     const activeSelection = selecoes.find(s => s.id === selectionId);
     const selectedPhotoIds = activeSelection ? (activeSelection.fotos_selecionadas || []) : [];
+    const lockedPhotoIds = activeSelection ? (activeSelection.fotos_travadas || []) : [];
 
     // Mesclar a propriedade selecionada para cada foto a partir das escolhas deste cliente específico
     const photosWithClientSelection = (matchedEvent.fotos || []).map((p, idx) => {
@@ -2257,9 +2333,11 @@ export default function App() {
         destaque: !!p.destaque,
         cena: p.cena || ''
       };
+      const isSelected = selectedPhotoIds.includes(photoObj.id);
       return {
         ...photoObj,
-        selecionada: selectedPhotoIds.includes(photoObj.id)
+        selecionada: isSelected,
+        travada: isSelected && lockedPhotoIds.includes(photoObj.id)
       };
     });
 
@@ -3140,6 +3218,7 @@ export default function App() {
               onConfirmPayment={handleConfirmPayment}
               onDeleteEvento={handleDeleteEvento}
               onReopenEvento={handleReopenEvento}
+              onToggleClientLockedPhotos={handleToggleClientLockedPhotos}
               onAddPortfolioPhoto={handleAddPortfolioPhoto}
               onDeletePortfolioPhoto={handleDeletePortfolioPhoto}
               onLogout={handleAdminLogout}

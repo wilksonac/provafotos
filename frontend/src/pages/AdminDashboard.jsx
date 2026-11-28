@@ -63,6 +63,7 @@ export default function AdminDashboard({
   onConfirmPayment,
   onDeleteEvento,
   onReopenEvento,
+  onToggleClientLockedPhotos,
   onAddPortfolioPhoto,
   onDeletePortfolioPhoto,
   onLogout,
@@ -184,8 +185,10 @@ export default function AdminDashboard({
   const [permitirDownload, setPermitirDownload] = useState(false);
   const [acessoRestrito, setAcessoRestrito] = useState(false);
   const [permitirAutoCadastro, setPermitirAutoCadastro] = useState(true);
+  const [travarFotosFinalizadas, setTravarFotosFinalizadas] = useState(true);
 
   const [categoriasFotos, setCategoriasFotos] = useState(['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
+  const [reopenModalData, setReopenModalData] = useState(null);
 
   const [copySuccess, setCopySuccess] = useState(null);
   const [editingClientId, setEditingClientId] = useState(null);
@@ -656,6 +659,7 @@ export default function AdminDashboard({
         permitir_download: permitirDownload,
         acesso_restrito: acessoRestrito,
         permitir_auto_cadastro: permitirAutoCadastro,
+        travar_fotos_finalizadas: travarFotosFinalizadas,
         categorias_fotos: categoriasFotos
       };
       onUpdateEvento(editingEventId, updatedFields);
@@ -680,6 +684,7 @@ export default function AdminDashboard({
         pagamento_extras_confirmado: false,
         acesso_restrito: acessoRestrito,
         permitir_auto_cadastro: permitirAutoCadastro,
+        travar_fotos_finalizadas: travarFotosFinalizadas,
         clientes_permitidos: targetClientId ? [targetClientId] : [],
         categorias_fotos: categoriasFotos
       };
@@ -701,6 +706,7 @@ export default function AdminDashboard({
     setPermitirDownload(true);
     setAcessoRestrito(false);
     setPermitirAutoCadastro(true);
+    setTravarFotosFinalizadas(true);
     setCategoriasFotos(['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
     setActiveSubTab('overview');
   };
@@ -731,6 +737,7 @@ export default function AdminDashboard({
     setPermitirDownload(evento.permitir_download !== undefined ? !!evento.permitir_download : false);
     setAcessoRestrito(!!evento.acesso_restrito);
     setPermitirAutoCadastro(evento.permitir_auto_cadastro !== undefined ? !!evento.permitir_auto_cadastro : true);
+    setTravarFotosFinalizadas(evento.travar_fotos_finalizadas !== undefined ? !!evento.travar_fotos_finalizadas : true);
     setCategoriasFotos(evento.categorias_fotos || ['Destaques', 'Preparativos', 'Cerimônia', 'Recepção']);
 
     setEditingEventId(evento.id);
@@ -867,7 +874,7 @@ export default function AdminDashboard({
 
   // Bloquear rolagem do fundo quando qualquer modal estiver aberto
   useEffect(() => {
-    const isAnyModalOpen = isShareModalOpen || photosModalEventId || selectedPhotosModal || previewPhotoModal || showAddCategoryModal || showGalleryCategoryModal;
+    const isAnyModalOpen = isShareModalOpen || photosModalEventId || selectedPhotosModal || previewPhotoModal || showAddCategoryModal || showGalleryCategoryModal || !!reopenModalData;
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
@@ -875,7 +882,7 @@ export default function AdminDashboard({
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [isShareModalOpen, photosModalEventId, selectedPhotosModal, previewPhotoModal, showAddCategoryModal, showGalleryCategoryModal]);
+  }, [isShareModalOpen, photosModalEventId, selectedPhotosModal, previewPhotoModal, showAddCategoryModal, showGalleryCategoryModal, reopenModalData]);
 
   return (
     <div className="w-full max-w-5xl mx-auto p-3 sm:p-6 bg-white border border-stone-200 rounded-xl shadow-sm text-stone-900 font-sans max-w-full">
@@ -1931,18 +1938,58 @@ export default function AdminDashboard({
                                                     />
                                                   </div>
                                                 )}
+                                                {statusSel === 'em_progresso' && selecionadasCount > 0 && (
+                                                  <div className="ml-1 pl-1 border-l border-stone-250 flex items-center">
+                                                    {activeSel?.fotos_travadas && activeSel.fotos_travadas.length > 0 ? (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          if (confirm(`Deseja DESTRAVAR as fotos de "${c.nome}"? O cliente poderá alterar ou desmarcar qualquer foto selecionada.`)) {
+                                                            onToggleClientLockedPhotos && onToggleClientLockedPhotos(evento.id, c.id, false);
+                                                          }
+                                                        }}
+                                                        title="Fotos travadas: o cliente só pode adicionar novas fotos. Clique para destravar."
+                                                        className="flex items-center gap-1 text-[9px] font-bold text-amber-850 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-300 transition-colors shadow-xs"
+                                                      >
+                                                        <span>🔒 {activeSel.fotos_travadas.length} travadas</span>
+                                                        <span className="text-[8px] font-medium text-stone-500 underline ml-0.5 hover:text-stone-850">Destravar</span>
+                                                      </button>
+                                                    ) : (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          if (confirm(`Deseja TRAVAR as ${selecionadasCount} fotos atuais de "${c.nome}"? O cliente não poderá desmarcá-las, apenas adicionar novas fotos.`)) {
+                                                            onToggleClientLockedPhotos && onToggleClientLockedPhotos(evento.id, c.id, true);
+                                                          }
+                                                        }}
+                                                        title="Fotos livres. Clique para travar a seleção atual do cliente."
+                                                        className="flex items-center gap-1 text-[9px] font-bold text-stone-600 bg-stone-100 hover:bg-stone-200 px-2 py-0.5 rounded border border-stone-250 transition-colors shadow-xs"
+                                                      >
+                                                        <span>🔓 Livres</span>
+                                                        <span className="text-[8px] font-medium text-stone-500 underline ml-0.5 hover:text-stone-850">Travar</span>
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
                                               </div>
 
                                               {statusSel === 'finalizada' && (
                                                 <button
+                                                  type="button"
                                                   onClick={() => {
-                                                    if (confirm(`Deseja reabrir a seleção para o cliente "${c.nome}"?`)) {
-                                                      onReopenEvento(evento.id, c.id);
-                                                    }
+                                                    setReopenModalData({
+                                                      eventId: evento.id,
+                                                      clientId: c.id,
+                                                      clientName: c.nome,
+                                                      galleryTitle: evento.titulo,
+                                                      selectedCount: selecionadasCount,
+                                                      defaultLock: evento.travar_fotos_finalizadas !== false,
+                                                      isGlobal: false
+                                                    });
                                                   }}
-                                                  className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0"
+                                                  className="text-[9px] font-bold text-amber-700 hover:text-amber-850 uppercase tracking-wider transition-colors ml-auto flex-shrink-0 flex items-center gap-1 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded border border-amber-200"
                                                 >
-                                                  Reabrir Seleção
+                                                  <span>🔄 Reabrir Seleção</span>
                                                 </button>
                                               )}
                                             </div>
@@ -2243,9 +2290,15 @@ export default function AdminDashboard({
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            if (confirm(`Deseja realmente reabrir a galeria "${evento.titulo}"? O cliente poderá editar a escolha de fotos.`)) {
-                                              onReopenEvento(evento.id);
-                                            }
+                                            setReopenModalData({
+                                              eventId: evento.id,
+                                              clientId: null,
+                                              clientName: null,
+                                              galleryTitle: evento.titulo,
+                                              selectedCount: totalSelecionadas,
+                                              defaultLock: evento.travar_fotos_finalizadas !== false,
+                                              isGlobal: true
+                                            });
                                           }}
                                           className="col-span-2 py-1.5 px-2.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-[10px] font-bold uppercase tracking-wider transition-colors text-center"
                                         >
@@ -2835,6 +2888,22 @@ export default function AdminDashboard({
                 </label>
                 <span className="text-[10px] text-stone-400 pl-10 leading-tight">
                   Permite que convidados e clientes façam autocadastro rápido (Nome, E-mail e Telefone) para escolher suas fotos individualmente via link direto.
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={travarFotosFinalizadas}
+                    onChange={(e) => setTravarFotosFinalizadas(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-stone-200 border border-stone-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-stone-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-stone-900 peer-checked:after:bg-white"></div>
+                  <span className="ml-2 text-xs font-bold text-stone-750 uppercase tracking-widest">Travar Fotos ao Reabrir</span>
+                </label>
+                <span className="text-[10px] text-stone-400 pl-10 leading-tight">
+                  Ao reabrir a seleção de um cliente finalizado, bloqueia a desmarcação das fotos já escolhidas anteriormente (permitindo apenas adicionar novas).
                 </span>
               </div>
             </div>
@@ -5532,6 +5601,148 @@ export default function AdminDashboard({
         document.body
       )}
 
+      {/* Modal de Reabertura com Opção de Travar Fotos */}
+      {reopenModalData && typeof document !== 'undefined' && createPortal(
+        <ReopenSelectionModal
+          data={reopenModalData}
+          onClose={() => setReopenModalData(null)}
+          onConfirm={(lockPhotos) => {
+            onReopenEvento(reopenModalData.eventId, reopenModalData.clientId, lockPhotos);
+            setReopenModalData(null);
+          }}
+        />,
+        document.body
+      )}
+
+    </div>
+  );
+}
+
+function ReopenSelectionModal({ data, onClose, onConfirm }) {
+  const [lockPhotos, setLockPhotos] = useState(data.defaultLock !== false);
+
+  if (!data) return null;
+
+  return (
+    <div 
+      className="fixed inset-0 bg-stone-950/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl border border-stone-200 max-w-md w-full overflow-hidden animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🔄</span>
+            <div>
+              <h3 className="font-serif-editorial text-base font-semibold tracking-wide text-white">
+                Reabrir Seleção de Fotos
+              </h3>
+              <p className="text-[10px] text-stone-300 font-mono tracking-wider truncate max-w-xs">
+                {data.galleryTitle} {data.clientName ? `• ${data.clientName}` : ''}
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={onClose}
+            className="text-stone-400 hover:text-white text-xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="bg-amber-50 border border-amber-200/80 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5">
+            <span className="text-base flex-shrink-0">📸</span>
+            <div>
+              <p className="font-semibold text-amber-950">
+                {data.selectedCount > 0 
+                  ? `${data.clientName ? `${data.clientName} possui` : 'A galeria possui'} ${data.selectedCount} foto${data.selectedCount > 1 ? 's' : ''} selecionada${data.selectedCount > 1 ? 's' : ''}.` 
+                  : 'Nenhuma foto selecionada ainda.'}
+              </p>
+              <p className="text-[11px] text-amber-800/90 mt-0.5">
+                Escolha abaixo como as fotos já escolhidas devem ser tratadas ao reabrir:
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <label 
+              onClick={() => setLockPhotos(true)}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                lockPhotos 
+                  ? 'border-stone-900 bg-stone-50 ring-1 ring-stone-900' 
+                  : 'border-stone-200 hover:border-stone-300 bg-white'
+              }`}
+            >
+              <input 
+                type="radio" 
+                name="reopen_lock_option" 
+                checked={lockPhotos} 
+                onChange={() => setLockPhotos(true)}
+                className="mt-1 text-stone-900 focus:ring-stone-900"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-stone-900 uppercase tracking-wide">
+                    🔒 Travar fotos anteriores
+                  </span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.2 rounded">
+                    Recomendado
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-600 mt-1 leading-snug">
+                  O cliente <strong>não poderá desmarcar nem trocar</strong> as fotos que já havia selecionado, podendo apenas <strong>adicionar fotos novas</strong>.
+                </p>
+              </div>
+            </label>
+
+            <label 
+              onClick={() => setLockPhotos(false)}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                !lockPhotos 
+                  ? 'border-stone-900 bg-stone-50 ring-1 ring-stone-900' 
+                  : 'border-stone-200 hover:border-stone-300 bg-white'
+              }`}
+            >
+              <input 
+                type="radio" 
+                name="reopen_lock_option" 
+                checked={!lockPhotos} 
+                onChange={() => setLockPhotos(false)}
+                className="mt-1 text-stone-900 focus:ring-stone-900"
+              />
+              <div className="flex-1">
+                <span className="text-xs font-bold text-stone-900 uppercase tracking-wide">
+                  🔓 Reabrir totalmente liberado
+                </span>
+                <p className="text-[11px] text-stone-600 mt-1 leading-snug">
+                  O cliente terá <strong>liberdade total</strong> para alterar tudo: desmarcar fotos anteriores, trocar ou escolher outras fotos.
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-stone-300 rounded text-xs font-bold text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(lockPhotos)}
+            className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>{lockPhotos ? '🔒 Reabrir com Travas' : '🔓 Reabrir Liberado'}</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

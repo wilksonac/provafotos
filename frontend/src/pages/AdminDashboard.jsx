@@ -1653,6 +1653,16 @@ export default function AdminDashboard({
                                 <span>{copySuccess === evento.token ? '✓ Copiado!' : '🔗 Copiar Link'}</span>
                               </button>
 
+                              {/* Gerar / Enviar Link com Texto */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShareModal(evento)}
+                                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Gerar mensagem pronta com o link da galeria para copiar ou enviar no WhatsApp"
+                              >
+                                <span>💬 Gerar / Enviar Link</span>
+                              </button>
+
                               {/* Upload Rápido */}
                               <button
                                 type="button"

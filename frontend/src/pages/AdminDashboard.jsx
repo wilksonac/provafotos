@@ -1501,7 +1501,8 @@ export default function AdminDashboard({
                   </div>
                 ) : (
                   <div id="admin-galleries-list-top" className="space-y-2.5">
-                    {paginatedEventos.map((evento) => {
+                    {paginatedEventos.map((evento, eventIndex) => {
+                      const isStripedRow = eventIndex % 2 === 1;
                       const computedStatus = getEventStatus(evento);
                       const isExpanded = expandedEventIds.has(evento.id);
                       
@@ -1533,7 +1534,9 @@ export default function AdminDashboard({
                       return (
                         <div
                           key={evento.id}
-                          className={`bg-white border rounded-xl transition-all duration-200 overflow-hidden shadow-2xs ${
+                          className={`border rounded-xl transition-all duration-200 overflow-hidden shadow-2xs ${
+                            isStripedRow ? 'bg-stone-100/70' : 'bg-white'
+                          } ${
                             isExpanded
                               ? 'border-stone-400/80 shadow-xs ring-1 ring-stone-900/5'
                               : 'border-stone-200 hover:border-stone-350'
@@ -1542,7 +1545,9 @@ export default function AdminDashboard({
                           {/* Linha Compacta do Cabeçalho da Galeria */}
                           <div
                             onClick={() => toggleExpandEvent(evento.id)}
-                            className="p-3.5 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 cursor-pointer hover:bg-stone-50/70 select-none transition-colors"
+                            className={`p-3.5 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                              isStripedRow ? 'hover:bg-stone-200/45' : 'hover:bg-stone-50/80'
+                            }`}
                           >
                             {/* Lado Esquerdo: Ícone de expansão, Título, Tags e Metadados */}
                             <div className="flex items-start sm:items-center gap-3 min-w-0">
@@ -1550,7 +1555,9 @@ export default function AdminDashboard({
                                 className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 flex-shrink-0 mt-0.5 sm:mt-0 ${
                                   isExpanded
                                     ? 'bg-stone-900 text-white rotate-180 shadow-xs'
-                                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                                    : isStripedRow
+                                      ? 'bg-white/90 text-stone-500 border border-stone-200/70 hover:bg-white'
+                                      : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
                                 }`}
                                 title={isExpanded ? 'Recolher detalhes' : 'Clique para ver detalhes'}
                               >
